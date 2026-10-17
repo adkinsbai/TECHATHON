@@ -69,6 +69,26 @@ class AudioTests(unittest.TestCase):
 
 
 class ClientTests(unittest.IsolatedAsyncioTestCase):
+    async def test_owned_client_bypasses_machine_proxies_for_loopback(self):
+        import httpx
+        from unittest.mock import patch
+        original = httpx.AsyncClient
+        with patch('body_bridge.client.httpx.AsyncClient', wraps=original) as factory:
+            client = CompanionClient('http://127.0.0.1:18765')
+            try:
+                self.assertIs(factory.call_args.kwargs.get('trust_env'), False)
+            finally:
+                await client.close()
+
+    async def test_injected_client_keeps_its_proxy_and_lifecycle_configuration(self):
+        import httpx
+        async with httpx.AsyncClient(trust_env=True, transport=httpx.MockTransport(
+                lambda request: httpx.Response(200))) as injected:
+            client = CompanionClient(http=injected)
+            self.assertIs(client.http, injected)
+            await client.close()
+            self.assertFalse(injected.is_closed)
+
     async def test_touch_drains_sse_and_propagates_error_with_chat_timeout(self):
         import httpx
         requests = []

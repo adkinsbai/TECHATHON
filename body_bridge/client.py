@@ -41,8 +41,9 @@ async def parse_sse(source):
 class CompanionClient:
     def __init__(self, url='http://127.0.0.1:8765', http=None):
         self.owned = http is None
+        # Windows 注册表代理也会被 httpx 自动读取；本机 Companion 必须直连。
         self.http = http or httpx.AsyncClient(base_url=url.rstrip('/'),
-                                             timeout=httpx.Timeout(30, connect=5))
+                                             timeout=httpx.Timeout(30, connect=5), trust_env=False)
 
     async def close(self):
         if self.owned:
