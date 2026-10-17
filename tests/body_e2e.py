@@ -112,10 +112,14 @@ async def verify(args, output):
             return (await http.get("/__fixture")).json()
 
         async def ready():
+            if fixture.poll() is not None:
+                raise RuntimeError("isolated fixture exited; inspect " + str(output / "fixture.log"))
             return (await state()).get("settings", {}).get("volume") == 10
 
         try:
-            await eventually(ready, "isolated Companion fixture did not start", timeout=25)
+            # Cold dependency imports on Windows were observed exceeding 60s.
+            # Keep the wait bounded and report an exited child immediately.
+            await eventually(ready, "isolated Companion fixture did not start", timeout=120)
             bridge = subprocess.Popen([sys.executable, "-B", "-m", "body_bridge", "--companion-url",
                                         f"http://127.0.0.1:{args.api_port}", "--port", str(args.tcp_port)],
                                        cwd=ROOT, stdout=bridge_log, stderr=subprocess.STDOUT)
@@ -170,6 +174,15 @@ async def verify(args, output):
             assert max(abs(x) for x in array("h", board.audio)) == 0, "zero volume must mute"
             await http.patch("/api/body/settings", json={"volume": 10})
 
+            # Disconnect while audio is active, rather than only after an idle turn.
+            board.audio.clear()
+            response = await http.post("/api/chat", json={"text": "断线恢复测试", "source": "web"})
+            assert response.status_code == 200
+
+            async def playing():
+                return board.mode == 1 and len(board.audio) > 0
+
+            await eventually(playing, "test did not reach active playback before disconnect")
             await board.stop()
             async def disconnected():
                 return not (await state())["connected"]
@@ -182,6 +195,7 @@ async def verify(args, output):
             result = {"real_hardware": False, "pressure_touch": True, "hold_release_asr_chat_tts": True,
                       "same_history": True, "default_volume": 10, "measured_test_pcm_amplitude": amplitude,
                       "web_reply_routes_to_body": True, "zero_mutes": True, "reconnect_discards_old_speech": True,
+                      "disconnect_during_playback": True,
                       "api_port": args.api_port, "fixture_pid": fixture.pid, "fixture_root": str(output / "companion")}
             (output / "result.json").write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
             print(json.dumps(result, ensure_ascii=False))

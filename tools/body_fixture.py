@@ -10,12 +10,13 @@ import wave
 
 
 def prepare(source, root):
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+    from install_companion import _filesystem_path, install
+    source, root = _filesystem_path(source), _filesystem_path(root)
     root.mkdir(parents=True, exist_ok=True)
     for folder in ("app", "static"):
         shutil.copytree(source / folder, root / folder, dirs_exist_ok=True,
-                        ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
-    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-    from install_companion import install
+                        ignore=shutil.ignore_patterns("__pycache__", "*.pyc", ".env*", "interaction-log.json"))
     return install(root)
 
 
