@@ -16,6 +16,13 @@
     <p class="body-error" role="alert" hidden></p><p class="body-foot">实体与电脑连接到同一 Wi-Fi 后，就会出现在这里。</p></div>`;
   document.body.appendChild(panel);
   const find = (s) => panel.querySelector(s);
+  // 团队测试版（Xiaonuan.exe）才有 /setup：在面板里放一个入口，方便找到“两只手”和密钥设置。
+  fetch("/api/setup/status").then((r) => (r.ok ? r.json() : null)).then((d) => {
+    if (d?.app !== "xiaonuan") return;
+    const link = document.createElement("a");
+    link.href = "/setup"; link.className = "body-setup-link"; link.textContent = "设置：两只手、密钥 →";
+    find(".body-inner").appendChild(link);
+  }).catch(() => {});
   const slider = find("input"), output = find("output"), error = find(".body-error");
   const emit = (name, data) => window.dispatchEvent(new CustomEvent(`body:${name}`, { detail: data }));
   const connected = () => !!(streamOpen && state.connected && Date.now() - received < 8000 &&

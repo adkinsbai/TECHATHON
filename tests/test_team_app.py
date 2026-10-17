@@ -31,6 +31,37 @@ class SaveKeyTests(unittest.TestCase):
             self.assertEqual(env.read_text(encoding="utf-8"), "DEEPSEEK_API_KEY=sk-new\n")
 
 
+class LauncherVersionTests(unittest.TestCase):
+    def test_build_info_version(self):
+        from xiaonuan_app import launcher
+        with tempfile.TemporaryDirectory() as tmp:
+            pathlib.Path(tmp, "build-info.json").write_text('﻿{"commit": "abc1234", "built": "2026-10-17 06:00"}',
+                                                            encoding="utf-8")
+            old = launcher.APP_DIR
+            launcher.APP_DIR = pathlib.Path(tmp)
+            try:
+                self.assertEqual(launcher.app_version(), "abc1234 · 2026-10-17 06:00")
+            finally:
+                launcher.APP_DIR = old
+
+
+class ShutdownRouteTests(unittest.IsolatedAsyncioTestCase):
+    async def test_shutdown_needs_takeover_header(self):
+        import httpx
+        from fastapi import FastAPI
+        from xiaonuan_app.setup_routes import attach_setup_routes
+        calls = []
+        app = FastAPI()
+        attach_setup_routes(app, home=".", link=None, hub=None, brain=None, config=None, body_port=5000,
+                            version="v", request_shutdown=lambda: calls.append(1))
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://127.0.0.1") as c:
+            self.assertEqual((await c.post("/api/setup/shutdown")).status_code, 403)
+            self.assertEqual(calls, [])
+            r = await c.post("/api/setup/shutdown", headers={"X-Xiaonuan": "takeover"})
+            self.assertEqual(r.status_code, 200)
+        self.assertEqual(calls, [1])
+
+
 class ConfigHomeTests(unittest.TestCase):
     def test_xiaonuan_home_moves_data_and_env(self):
         with tempfile.TemporaryDirectory() as tmp:
