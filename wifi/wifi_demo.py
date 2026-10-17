@@ -104,7 +104,7 @@ class Player:
         self.tracks = []
         self.index = 0
         self.state = "stopped"
-        self.volume = 2
+        self.volume = 10
         self.error = ""
         self.unsupported = 0
         self.pos_frames = 0
@@ -406,8 +406,7 @@ class Player:
                 data, _ = audioop.ratecv(data, 2, 1, rate, RATE, None)
             with self.lock:
                 vol = self.volume / 100.0
-            # 说话不跟 2% 的音乐音量走（否则几乎听不见）
-            data = audioop.mul(data, 2, min(1.0, max(0.5, vol * 3.0)))
+            data = audioop.mul(data, 2, vol)
             stereo = audioop.tostereo(data, 2, 1.0, 1.0)
             self.link.set_mode(MODE_PLAY)
             time.sleep(0.2)
@@ -415,24 +414,24 @@ class Player:
             sent = 0
             for off in range(0, len(stereo), AUD_BYTES):
                 piece = stereo[off:off + AUD_BYTES]
-                ok = False
-                while not ok:
-                    ok = self.link.send_audio(piece)
-                    if not ok:
-                        time.sleep(0.2)
+                piece = piece.ljust(AUD_BYTES, b"\x00")
+                # A failed send may have transmitted a partial frame. Abort rather than replay.
+                if not self.link.send_audio(piece):
+                    raise OSError("audio link disconnected during speech")
                 sent += len(piece)
                 target = sent / 4.0 / RATE - 0.3
                 elapsed = time.monotonic() - start
                 if target > elapsed:
                     time.sleep(target - elapsed)
-            time.sleep(0.3)
-            self.link.set_mode(MODE_IDLE)
+            # Include the paced lead and the I2S DMA tail before clearing playback mode.
+            time.sleep(max(0.0, sent / 4.0 / RATE - (time.monotonic() - start)) + 0.35)
             self.link.log("说了一句：%s" % text[:40])
             return True
         except Exception as exc:
             self.link.log("说话失败：%r" % exc)
             return False
         finally:
+            self.link.set_mode(MODE_IDLE)
             with self.lock:
                 self.speaking = False
 
@@ -1023,7 +1022,7 @@ class Handler(BaseHTTPRequestHandler):
         elif path == "/api/prev":
             PLAYER.skip(-1)
         elif path == "/api/volume":
-            PLAYER.set_volume(int(q.get("v", 2)))
+            PLAYER.set_volume(int(q.get("v", 10)))
         elif path == "/api/record":
             PLAYER.toggle_record()
         elif path == "/api/say":
