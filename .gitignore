@@ -15,3 +15,19 @@ firmware/wifi.json
 # 大文件 / 模型
 *.gguf
 llm/
+
+# Body integration local paths, source backups and service logs
+.local-body.json
+.body-runtime/
+runtime/
+.body-backups/
+.env
+.env.*
+!**/.env.example
+
+# Personal Companion state and downloaded speech models never belong in Git.
+companion/data/
+companion/models/
+companion/static/assets/**/interaction-log.json
+companion/.body-backups/
+companion/.body-runtime/

@@ -1,0 +1,110 @@
+{
+  "schemaVersion": "1.0.0",
+  "exportedAt": "2026-10-17T09:40:55.634Z",
+  "character": {
+    "name": "塔菲",
+    "description": "生成图中的噜噜玩偶的模型，保留它的斜挎包和小短裤",
+    "personality": "温柔 · 好奇 · 有一点害羞"
+  },
+  "asset": {
+    "file": "character.glb",
+    "originalFileName": "rodin-fc37f151.glb",
+    "source": "rodin",
+    "meshes": 1,
+    "triangles": 18644,
+    "bytes": 1747716
+  },
+  "coordinates": {
+    "handedness": "right",
+    "up": "+Y",
+    "forward": "+Z",
+    "units": "meter",
+    "normalizedHeight": 2.6,
+    "origin": "ground-center",
+    "sourceOrientationVerified": false
+  },
+  "rig": {
+    "version": "待确认",
+    "type": "static",
+    "bones": [],
+    "skinnedMeshes": 0,
+    "restPose": "unverified"
+  },
+  "capabilities": {
+    "morphTargets": [],
+    "materialSlots": [
+      "0569d7be-063b-4593-9075-3a523105cb3e"
+    ],
+    "interactionRegions": [
+      "body"
+    ],
+    "automaticRigging": false,
+    "animationRetargeting": false
+  },
+  "appearance": {
+    "materialColors": {}
+  },
+  "actions": [
+    {
+      "id": "idle",
+      "label": "呼吸待机",
+      "loop": true,
+      "clip": null,
+      "proceduralDemo": false,
+      "available": false,
+      "durationSeconds": null
+    },
+    {
+      "id": "greet",
+      "label": "挥手打招呼",
+      "loop": false,
+      "clip": null,
+      "proceduralDemo": false,
+      "available": false,
+      "durationSeconds": null
+    },
+    {
+      "id": "enjoy_head_pat",
+      "label": "享受摸头",
+      "loop": false,
+      "clip": null,
+      "proceduralDemo": false,
+      "available": false,
+      "durationSeconds": null
+    },
+    {
+      "id": "hug",
+      "label": "温暖拥抱",
+      "loop": false,
+      "clip": null,
+      "proceduralDemo": false,
+      "available": false,
+      "durationSeconds": null
+    },
+    {
+      "id": "react_to_shake",
+      "label": "晕乎乎",
+      "loop": false,
+      "clip": null,
+      "proceduralDemo": false,
+      "available": false,
+      "durationSeconds": null
+    },
+    {
+      "id": "listen",
+      "label": "认真倾听",
+      "loop": false,
+      "clip": null,
+      "proceduralDemo": false,
+      "available": false,
+      "durationSeconds": null
+    }
+  ],
+  "animationClips": [],
+  "interactionExamples": [],
+  "limitations": [
+    "导入不会自动绑定骨骼或重定向动作。",
+    "请在 Blender 中确认默认姿态、朝向、蒙皮变形与运动限制。"
+  ],
+  "notes": ""
+}

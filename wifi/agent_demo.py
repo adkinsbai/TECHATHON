@@ -175,7 +175,7 @@ def tts_windows(text, out_wav, voice=None):
     return out_wav
 
 
-def speak_wav(link, wav_path, volume=0.6):
+def speak_wav(link, wav_path, volume=0.1):
     """把任意 WAV 转成 24kHz 立体声 16bit，推给板子播出来。"""
     with wave.open(wav_path, "rb") as w:
         ch = w.getnchannels()
@@ -197,23 +197,22 @@ def speak_wav(link, wav_path, volume=0.6):
     time.sleep(0.15)
     start = time.monotonic()
     sent = 0
-    for off in range(0, len(stereo), AUD_BYTES):
-        piece = stereo[off:off + AUD_BYTES]
-        ok = False
-        while not ok:
-            ok = link.send_audio(piece)
-            if not ok:
-                time.sleep(0.2)
-        sent += len(piece)
-        target = sent / 4.0 / RATE - LEAD_SECONDS
-        elapsed = time.monotonic() - start
-        if target > elapsed:
-            time.sleep(target - elapsed)
-    time.sleep(0.4)
-    link.set_mode(MODE_IDLE)
+    try:
+        for off in range(0, len(stereo), AUD_BYTES):
+            piece = stereo[off:off + AUD_BYTES].ljust(AUD_BYTES, b"\x00")
+            if not link.send_audio(piece):
+                raise OSError("audio link disconnected during speech")
+            sent += len(piece)
+            target = sent / 4.0 / RATE - LEAD_SECONDS
+            elapsed = time.monotonic() - start
+            if target > elapsed:
+                time.sleep(target - elapsed)
+        time.sleep(max(0.0, sent / 4.0 / RATE - (time.monotonic() - start)) + 0.35)
+    finally:
+        link.set_mode(MODE_IDLE)
 
 
-def say(link, text, voice=None, volume=0.6):
+def say(link, text, voice=None, volume=0.1):
     tmp = os.path.join(tempfile.gettempdir(), "esp32_say.wav")
     tts_windows(text, tmp, voice)
     speak_wav(link, tmp, volume)
@@ -281,7 +280,7 @@ def main():
     ap.add_argument("--record", action="store_true", help="只录一句，存 WAV")
     ap.add_argument("--api", action="store_true", help="录一句 → OpenAI 回答 → 念出来")
     ap.add_argument("--voice", default=None, help="Windows 语音的名字（可选）")
-    ap.add_argument("--volume", type=float, default=0.6, help="说话音量 0~1")
+    ap.add_argument("--volume", type=float, default=0.1, help="说话音量 0~1")
     ap.add_argument("--seconds", type=float, default=15.0, help="一次最多录多久")
     args = ap.parse_args()
 

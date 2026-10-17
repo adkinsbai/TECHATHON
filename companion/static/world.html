@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>梦幻星球</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/lxgw-wenkai-screen-webfont@1.7.0/style.css">
+<link rel="stylesheet" href="/static/world.css?v=13">
+<!-- BEGIN XIAONUAN BODY VIEW -->
+<link rel="stylesheet" href="/static/body-client.css">
+<script src="/static/body-client.js" defer></script>
+<!-- END XIAONUAN BODY VIEW -->
+</head>
+<body>
+<canvas id="scene" tabindex="0"></canvas>
+
+<!-- 开始界面 -->
+<div class="overlay" id="startScreen">
+  <div class="card">
+    <div class="planet" aria-hidden="true"></div>
+    <h1>梦幻星球</h1>
+    <p id="startSub">噜噜在湖边的小木屋里等你</p>
+    <div class="chapters" id="chapters"></div>
+    <button class="btn" id="enterBtn" disabled>正在生成星球…</button>
+    <ul class="keys">
+      <li><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> 行走</li>
+      <li><kbd>鼠标</kbd> 看四周（进入后自动全屏、锁定鼠标）</li>
+      <li><kbd>Shift</kbd> 奔跑 · <kbd>空格</kbd> 跳</li>
+      <li><kbd>E</kbd> 和噜噜说话 · <kbd>F</kbd> 跟噜噜出门（第二章）</li>
+      <li><kbd>Esc</kbd> 暂停</li>
+    </ul>
+    <a class="back" href="/">← 回到聊天</a>
+  </div>
+</div>
+
+<!-- HUD -->
+<div class="hud" id="hud" hidden>
+  <div class="crosshair"></div>
+  <div class="compass" id="compass"><span class="arrow" id="compassArrow">➤</span><span id="compassText"></span></div>
+  <div class="hint" id="hint" hidden></div>
+  <div class="bubble" id="bubble" hidden></div>
+  <div class="caption" id="caption" hidden></div>
+  <div class="quest" id="quest" hidden></div>
+  <div class="space-hint" id="spaceHint" hidden>
+    <span>拖动 / 方向键 环顾 · <kbd>V</kbd> 切换舱内/舱外 · <kbd>E</kbd> 和噜噜说话</span>
+    <button class="btn small" id="homeBtn">🏠 回家（H）</button>
+  </div>
+</div>
+<div class="flash" id="flash"></div>
+
+<!-- 对话框 -->
+<div class="chat" id="chat" hidden>
+  <div class="chat-log" id="chatLog"></div>
+  <form class="chat-form" id="chatForm">
+    <button class="btn ghost icon" type="button" id="micBtn" title="点一下开始说话，再点一下结束">🎙</button>
+    <button class="btn ghost icon" type="button" id="voiceBtn" title="朗读 TA 的回复">🔇</button>
+    <input id="chatInput" placeholder="对噜噜说点什么…" autocomplete="off">
+    <button class="btn" type="submit">发送</button>
+    <button class="btn ghost" type="button" id="chatClose">离开（Esc）</button>
+  </form>
+</div>
+
+<script type="importmap">{ "imports": { "three": "/static/vendor/three.module.min.js" } }</script>
+<script type="module" src="/static/world.js?v=24"></script>
+</body>
+</html>

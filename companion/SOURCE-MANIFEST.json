@@ -1,0 +1,219 @@
+{
+  "schema_version": 1,
+  "exported_at_utc": "2026-10-17T10:33:54.552782+00:00",
+  "source_description": "Active Companion application source; app and static allowlist",
+  "files": [
+    {
+      "path": ".env.example",
+      "bytes": 455,
+      "sha256": "7a36bcdd4cb5ef8eb25240aab8e4f0cec5c4001b9a44ddd29f8cda872a51c352",
+      "origin": "generated_portable_configuration"
+    },
+    {
+      "path": ".gitattributes",
+      "bytes": 61,
+      "sha256": "22106984a6c1274ead5c283789ca11d75b303658949aaa627698747e7b2d6160",
+      "origin": "generated_portable_configuration"
+    },
+    {
+      "path": "app/__init__.py",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "origin": "copied_exact_bytes"
+    },
+    {
+      "path": "app/body_runtime.py",
+      "bytes": 11459,
+      "sha256": "53479f5d65f75f6640451aef416c4ec88bb92f60f9f7e12037f6099b25ddf37a",
+      "origin": "copied_exact_bytes"
+    },
+    {
+      "path": "app/brain.py",
+      "bytes": 18374,
+      "sha256": "951cbb9e0d6fd593fe1a5c9633339f8b9827cbad3330a54e3258cd7a1f133379",
+      "origin": "copied_exact_bytes"
+    },
+    {
+      "path": "app/config.py",
+      "bytes": 1460,
+      "sha256": "522993079fdd8a6dc8eb6ab24f88dde54dd3dfe6644b796e1fd2e8100290c578",
+      "origin": "copied_exact_bytes"
+    },
+    {
+      "path": "app/default_persona.json",
+      "bytes": 1008,
+      "sha256": "836f1ce5a21f0f0ac764cc2c2d51cda5b96679f487e5441f9918cab00328d09a",
+      "origin": "copied_exact_bytes"
+    },
+    {
+      "path": "app/server.py",
+      "bytes": 16571,
+      "sha256": "9807545d275be322038c69b93ec68c0de66878364b1c513d8edeb1ab8cff67d2",
+      "origin": "copied_exact_bytes"
+    },
+    {
+      "path": "app/store.py",
+      "bytes": 8386,
+      "sha256": "5e92bd088e8ba7c5adb57ab3e246821c55f36499664651d3a0475a529a8bd23c",
+      "origin": "copied_exact_bytes"
+    },
+    {
+      "path": "app/voice.py",
+      "bytes": 9274,
+      "sha256": "cb1d9c4c84e3c6eb47c080bbe05ec5fd3ffe6e265da0814fbdf16168e310bdf8",
+      "origin": "copied_exact_bytes"
+    },
+    {
+      "path": "app/weaver.py",
+      "bytes": 10108,
+      "sha256": "b7de5d819c4124eb960480a95d87b2156f350fec00e239a5a903f8b209c7f0ce",
+      "origin": "copied_exact_bytes"
+    },
+    {
+      "path": "download_models.py",
+      "bytes": 1674,
+      "sha256": "9b3e418ce8cd60c2dbb5eebb94f4913f910ef92badf68c327168e941b03b210e",
+      "origin": "copied_exact_bytes"
+    },
+    {
+      "path": "requirements.txt",
+      "bytes": 227,
+      "sha256": "50c08dec27d645d81829f3db8c40dfc149956c8e10b8ed4cf2cbad434ae70e24",
+      "origin": "generated_portable_configuration"
+    },
+    {
+      "path": "static/app.js",
+      "bytes": 30847,
+      "sha256": "ede16c2e3e4ff48c95d04b728f748904cd6e330bc9c0aef1d226a12da18d81f6",
+      "origin": "copied_exact_bytes"
+    },
+    {
+      "path": "static/assets/lulu/character.glb",
+      "bytes": 1745220,
+      "sha256": "a69d2270c92aa4eb80620d096c2623efceff2906e10daa955276bc9ef41ec574",
+      "origin": "copied_exact_bytes"
+    },
+    {
+      "path": "static/assets/lulu/manifest.json",
+      "bytes": 2506,
+      "sha256": "9a85ec03b6f346c41f3190f4cb3b40d087d51dffeea9ddcd88d6c46c3e8f18e9",
+      "origin": "copied_exact_bytes"
+    },
+    {
+      "path": "static/assets/lulu/preview.png",
+      "bytes": 129330,
+      "sha256": "b3f6bf8332757fa58ae0487f8fa24b0fcb54615bd75cabbf572d718560f4c0c6",
+      "origin": "copied_exact_bytes"
+    },
+    {
+      "path": "static/assets/lulu/rig-guide.md",
+      "bytes": 967,
+      "sha256": "555bfe1c58b96547119ccce487189543c60fc0ed0c972b19ffca406e0c4016e6",
+      "origin": "copied_exact_bytes"
+    },
+    {
+      "path": "static/avatar.js",
+      "bytes": 9144,
+      "sha256": "152e74e699efe19d18280b5e8b2f25cf80493724d9e27bcb6de93cf61df28ec0",
+      "origin": "copied_exact_bytes"
+    },
+    {
+      "path": "static/avatar3d.js",
+      "bytes": 4258,
+      "sha256": "9812e69dffa754560b4b12dc33f276963186c7f5978073a7e51a8d9daa6d2782",
+      "origin": "copied_exact_bytes"
+    },
+    {
+      "path": "static/body-client.css",
+      "bytes": 2974,
+      "sha256": "d0f6947322b3c8f73dd8a00b6d60b891ec748ee3e9455cf2c1fbe9f2f64e0d76",
+      "origin": "copied_exact_bytes"
+    },
+    {
+      "path": "static/body-client.js",
+      "bytes": 6476,
+      "sha256": "748504efd173f2f1060e918177f8f7496be273778253f27062e406b39f243aea",
+      "origin": "copied_exact_bytes"
+    },
+    {
+      "path": "static/character.js",
+      "bytes": 1513,
+      "sha256": "283e9eff8cb187133d191258a0def21496b30a1783202cff00bf22c20ff64207",
+      "origin": "copied_exact_bytes"
+    },
+    {
+      "path": "static/index.html",
+      "bytes": 14042,
+      "sha256": "003baf2fdc8e30a5d44ed54ee0caa9bf135a7af3472e09870debd90056a5601b",
+      "origin": "copied_exact_bytes"
+    },
+    {
+      "path": "static/space.js",
+      "bytes": 15172,
+      "sha256": "e86fbc8386915266b388e17621999c9b1843af3d9281c399ae18978f8da5c1d5",
+      "origin": "copied_exact_bytes"
+    },
+    {
+      "path": "static/style.css",
+      "bytes": 23097,
+      "sha256": "639712b70435af29566dfd18977288ce8c1b1c9fe74c0ab4ee0ba3439404ca46",
+      "origin": "copied_exact_bytes"
+    },
+    {
+      "path": "static/vendor/BGUtils.js",
+      "bytes": 31906,
+      "sha256": "9be041e96308775d00e2695cc607645b9a9b64fd7c0e759dd8f7c00a8d92becb",
+      "origin": "copied_exact_bytes"
+    },
+    {
+      "path": "static/vendor/GLTFLoader.js",
+      "bytes": 108503,
+      "sha256": "f516fb71d289a4bf3633110d97612c2ce45837909c8606ba8d21b7cfc2b38c35",
+      "origin": "copied_exact_bytes"
+    },
+    {
+      "path": "static/vendor/three.module.min.js",
+      "bytes": 670681,
+      "sha256": "3e690ac7d180b0aadf0891bea39eec643e29e2d3e75c99b18689518665f69ba6",
+      "origin": "copied_exact_bytes"
+    },
+    {
+      "path": "static/world.css",
+      "bytes": 6898,
+      "sha256": "c2a0171a8297f193626c6686bfce34077239161fbaf7a16555995ba3828595d0",
+      "origin": "copied_exact_bytes"
+    },
+    {
+      "path": "static/world.html",
+      "bytes": 2804,
+      "sha256": "f6c17c783e7efd99f68ba1c1cd5c774c813056e96635f7a6bdfe5d31b83444a8",
+      "origin": "copied_exact_bytes"
+    },
+    {
+      "path": "static/world.js",
+      "bytes": 106084,
+      "sha256": "a2c1dd36688d0ffc99ab4d3771e25d07fbe2b7488be61e4758e76bdcab2fc793",
+      "origin": "copied_exact_bytes"
+    },
+    {
+      "path": "static/worldgen.js",
+      "bytes": 24950,
+      "sha256": "915320f61cfd5fb841c05e2b4ffcb88e32f88c4af494a0c9f61f12e7a74c1327",
+      "origin": "copied_exact_bytes"
+    }
+  ],
+  "excluded_files": [
+    "static/assets/lulu/interaction-log.json",
+    "README.md"
+  ],
+  "model_upstreams": [
+    {
+      "url": "https://huggingface.co/csukuangfj/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2025-09-09",
+      "license": "See upstream LICENSE; model weights are excluded"
+    },
+    {
+      "url": "https://huggingface.co/csukuangfj/kokoro-int8-multi-lang-v1_1",
+      "license": "See upstream LICENSE; model weights are excluded"
+    }
+  ]
+}

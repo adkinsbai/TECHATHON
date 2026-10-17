@@ -103,6 +103,13 @@ class Ring:
     def level(self):
         return (self.head - self.tail) % self.size
 
+    def clear(self):
+        """模式切换时丢掉旧语音，不在下一次播放中重放。"""
+        self.head = 0
+        self.tail = 0
+        self.played = False
+        self.starved_at = time.ticks_ms()
+
     def free(self):
         return self.size - 1 - self.level()
 
@@ -395,7 +402,10 @@ def run():
                         if not ring.write(payload):
                             stats["drops"] += 1       # 缓冲满：电脑发太快了
                     elif mtype == T_MODE:
-                        audio.set_mode(payload[0] if payload else MODE_IDLE)
+                        mode = payload[0] if payload else MODE_IDLE
+                        if mode != audio.mode:
+                            ring.clear()
+                        audio.set_mode(mode)
                         stats["mode"] = audio.mode
                     elif mtype == T_PING:
                         n = build_frame(T_PONG, b"", txbuf)
