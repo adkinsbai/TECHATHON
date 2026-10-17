@@ -46,12 +46,31 @@ function Get-Listener([int]$ListenPort) {
     return [pscustomobject]@{ Process=$process; Addresses=@($listeners.LocalAddress); ProcessId=$owners[0] }
 }
 
-function Get-BodyStatus([string]$Url) {
+function Get-BodyProbe([string]$Url) {
     try {
         $status = Invoke-RestMethod "$Url/api/body/status" -TimeoutSec 3
-        if ($null -ne $status.connected -and $null -ne $status.settings.volume) { return $status }
-    } catch { }
+        if ($null -ne $status.connected -and $null -ne $status.settings.volume) {
+            return [pscustomobject]@{ State='ready'; Status=$status; Error=$null }
+        }
+        return [pscustomobject]@{ State='unavailable'; Status=$null; Error='Unexpected body status response' }
+    } catch {
+        if ($_.Exception.Response -and [int]$_.Exception.Response.StatusCode -eq 404) {
+            return [pscustomobject]@{ State='missing'; Status=$null; Error='Body route returned HTTP 404' }
+        }
+        return [pscustomobject]@{ State='unavailable'; Status=$null; Error=$_.Exception.Message }
+    }
+}
+
+function Get-BodyStatus([string]$Url) {
+    $probe = Get-BodyProbe $Url
+    if ($probe.State -eq 'ready') { return $probe.Status }
     return $null
+}
+
+function Get-CompanionRestartDecision([bool]$BackendChanged, [string]$ProbeState) {
+    if ($BackendChanged -or $ProbeState -eq 'missing') { return 'restart' }
+    if ($ProbeState -eq 'ready') { return 'reuse' }
+    return 'wait'
 }
 
 function Start-HiddenPython([string[]]$Arguments, [string]$Working, [string]$Name) {
@@ -95,8 +114,21 @@ try {
     if ($LASTEXITCODE -ne 0) { throw 'Source installation failed; inspect the error above.' }
     $installed = ($installOutput -join "`n") | ConvertFrom-Json
     $backendChanged = @($installed.changed | Where-Object { $_ -in @('app/server.py','app/body_runtime.py') }).Count -gt 0
-    $status = Get-BodyStatus $url
-    if ($companion -and ($backendChanged -or -not $status)) {
+    $restartDecision = 'reuse'
+    if ($companion) {
+        $probe = Get-BodyProbe $url
+        $restartDecision = Get-CompanionRestartDecision $backendChanged $probe.State
+        $probeDeadline = (Get-Date).AddSeconds(30)
+        while ($restartDecision -eq 'wait' -and (Get-Date) -lt $probeDeadline) {
+            Start-Sleep -Milliseconds 500
+            $probe = Get-BodyProbe $url
+            $restartDecision = Get-CompanionRestartDecision $backendChanged $probe.State
+        }
+        if ($restartDecision -eq 'wait') {
+            throw "Companion PID $($companion.ProcessId) did not answer the body probe in time and was left running. Retry when model load settles. Probe: $($probe.Error)"
+        }
+    }
+    if ($companion -and $restartDecision -eq 'restart') {
         # Re-read the listener and its command immediately before stopping it.
         $current = Get-Listener $CompanionPort
         if (-not $current -or $current.ProcessId -ne $companion.ProcessId -or -not (Test-CompanionProcess $current.Process $CompanionRoot)) {

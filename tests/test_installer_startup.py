@@ -8,6 +8,37 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class StartupTests(unittest.TestCase):
+    def test_restart_requires_changed_backend_or_definitive_missing_route(self):
+        script = ROOT / 'start-body.ps1'
+        self.assertIn('function Get-BodyProbe(', script.read_text(encoding='utf-8'), 'startup must distinguish a missing route from an unavailable probe')
+        harness = '''param($Script)
+. $Script -LibraryOnly
+function Invoke-RestMethod {
+  if ($script:probeMode -eq 'missing') {
+    $failure = [System.Exception]::new('404')
+    $failure | Add-Member -NotePropertyName Response -NotePropertyValue ([pscustomobject]@{StatusCode=404})
+    throw $failure
+  }
+  throw [System.TimeoutException]::new('server is busy')
+}
+$script:probeMode='missing'
+$missing=Get-BodyProbe 'http://127.0.0.1:8765'
+$script:probeMode='timeout'
+$busy=Get-BodyProbe 'http://127.0.0.1:8765'
+$result=@($missing.State,$busy.State,
+  (Get-CompanionRestartDecision $false $missing.State),
+  (Get-CompanionRestartDecision $false $busy.State),
+  (Get-CompanionRestartDecision $true $busy.State),
+  (Get-CompanionRestartDecision $false 'ready'))
+ConvertTo-Json -InputObject $result -Compress
+'''
+        with tempfile.TemporaryDirectory() as tmp:
+            test = Path(tmp) / 'probe.ps1'
+            test.write_text(harness, encoding='utf-8-sig')
+            result = subprocess.run(['powershell', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', str(test), str(script)], capture_output=True, text=True, timeout=60)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(json.loads(result.stdout), ['missing', 'unavailable', 'restart', 'wait', 'restart', 'reuse'])
+
     def test_service_identity_rejects_unrelated_listeners(self):
         script = ROOT / 'start-body.ps1'
         self.assertTrue(script.exists(), 'safe startup script is missing')
@@ -32,7 +63,7 @@ ConvertTo-Json -InputObject $cases -Compress
         with tempfile.TemporaryDirectory() as tmp:
             test = Path(tmp) / 'test.ps1'
             test.write_text(harness, encoding='utf-8-sig')
-            result = subprocess.run(['powershell', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', str(test), str(script)], capture_output=True, text=True, timeout=15)
+            result = subprocess.run(['powershell', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', str(test), str(script)], capture_output=True, text=True, timeout=60)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(json.loads(result.stdout), [True, False, False, False, True, False, False, True, True, False, False])
 
