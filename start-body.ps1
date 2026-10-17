@@ -4,6 +4,7 @@ param(
     [ValidateRange(1024,65535)][int]$CompanionPort = 8765,
     [ValidateRange(1024,65535)][int]$Port = 5000,
     [ValidateRange(0,100)][int]$Volume = 10,
+    [switch]$NoBrowser,
     [switch]$LibraryOnly
 )
 $ErrorActionPreference = 'Stop'
@@ -19,6 +20,8 @@ function Test-CompanionProcess($Process, [string]$Root) {
     $appIndex = if ($exe -match '^uvicorn(?:\.exe)?$') { 1 } elseif ($exe -match '^python(?:w|3(?:\.12)?)?(?:\.exe)?$' -and $tokens.Count -ge 4 -and $tokens[1] -eq '-m' -and $tokens[2] -eq 'uvicorn') { 3 } else { return $false }
     if ($tokens[$appIndex] -ne 'app.server:app') { return $false }
     $dirIndex = [array]::IndexOf($tokens, '--app-dir')
+    # A module name alone does not identify the checkout used by another process.
+    if ($dirIndex -lt 0) { return $false }
     if ($dirIndex -ge 0) {
         if ($dirIndex + 1 -ge $tokens.Count -or $tokens[$dirIndex + 1].TrimEnd('\','/') -ine $Root.TrimEnd('\','/')) { return $false }
     }
@@ -126,7 +129,7 @@ try {
         ConvertTo-Json | Set-Content -LiteralPath (Join-Path $runtime 'services.json') -Encoding UTF8
     Write-Host "Companion PID $companionPid; body bridge PID $bridgePid; TCP $Port; initial volume $Volume%."
     Write-Host "Open $url . Logs: $runtime . Waiting for the board does not confirm hardware acceptance."
-    Start-Process $url
+    if (-not $NoBrowser) { Start-Process $url }
 } catch {
     $_ | Out-String | Set-Content -LiteralPath (Join-Path $runtime 'startup-error.log') -Encoding UTF8
     Write-Error $_
