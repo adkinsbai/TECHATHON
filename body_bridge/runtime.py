@@ -42,6 +42,7 @@ class Bridge(Capture, Playback):
             self.speech.task_done()
 
     async def reset_connection(self, connected):
+        self.clear_busy_advisory()
         self.epoch += 1
         self.play_token += 1
         self.capture.clear()

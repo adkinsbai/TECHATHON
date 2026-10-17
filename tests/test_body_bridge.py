@@ -214,6 +214,61 @@ class RuntimeTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual([c[0] for c in self.client.calls], ['asr', 'chat'])
         self.assertEqual(self.client.calls[0][1][:4], b'RIFF')
 
+    async def test_busy_advisory_clears_when_current_turn_finishes(self):
+        entered, finish = asyncio.Event(), asyncio.Event()
+        async def chat(heard):
+            entered.set()
+            await finish.wait()
+        self.client.chat = chat
+        await self.bridge.press(1)
+        self.bridge.feed_mic(bytes(4800))
+        await self.bridge.release(2)
+        await entered.wait()
+        await self.bridge.press(3)
+        self.assertEqual(self.bridge.error, '正在处理上一句话，请稍候')
+        finish.set()
+        await self.bridge.wait_work()
+        self.assertEqual(self.bridge.phase, 'idle')
+        self.assertEqual(self.bridge.error, '')
+
+    async def test_real_asr_failure_replaces_busy_advisory_and_is_preserved(self):
+        entered, finish = asyncio.Event(), asyncio.Event()
+        async def asr(wav):
+            entered.set()
+            await finish.wait()
+            raise RuntimeError('本地识别失败')
+        self.client.asr = asr
+        await self.bridge.press(1)
+        self.bridge.feed_mic(bytes(4800))
+        await self.bridge.release(2)
+        await entered.wait()
+        await self.bridge.press(3)
+        finish.set()
+        await self.bridge.wait_work()
+        self.assertEqual(self.bridge.error, '本地识别失败')
+
+    async def test_busy_press_does_not_overwrite_a_real_error(self):
+        finish = asyncio.Event()
+        self.bridge.work = asyncio.create_task(finish.wait())
+        self.bridge.error = '板子发送超时'
+        try:
+            await self.bridge.press()
+            self.assertEqual(self.bridge.error, '板子发送超时')
+        finally:
+            finish.set()
+            await self.bridge.wait_work()
+
+    async def test_connection_recovery_clears_busy_advisory_but_preserves_real_error(self):
+        self.bridge.error = '正在处理上一句话，请稍候'
+        self.link.connected = False
+        await self.bridge.poll()
+        self.assertEqual(self.bridge.error, '')
+        self.bridge.error = '板子发送超时'
+        self.link.connected = True
+        self.link.conn_id += 1
+        await self.bridge.poll()
+        self.assertEqual(self.bridge.error, '板子发送超时')
+
     async def test_raw_pressure_samples_never_call_companion_without_contact(self):
         for index in range(50):
             self.link.force = {'raw': 1000 + index % 3, 'mv': 805, 'at': time.time() + index * .00001}

@@ -5,8 +5,14 @@ import uuid
 
 from .audio import MAX_CAPTURE_BYTES, wav_bytes
 
+BUSY_ADVISORY = '正在处理上一句话，请稍候'
+
 
 class Capture:
+    def clear_busy_advisory(self):
+        if self.error == BUSY_ADVISORY:
+            self.error = ''
+
     def feed_mic(self, payload):
         # Link 在接收线程回调；只把有界字节投递回所属事件循环。
         if self.phase != 'recording':
@@ -32,8 +38,10 @@ class Capture:
         if not self.fresh() or self.blocked_until_release or self.phase == 'recording':
             return
         if self.work and not self.work.done():
-            self.error = '正在处理上一句话，请稍候'
+            if not self.error:
+                self.error = BUSY_ADVISORY
             return
+        self.clear_busy_advisory()
         self.play_token += 1
         if self.play_task:
             self.play_task.cancel()
@@ -90,6 +98,7 @@ class Capture:
         finally:
             if epoch == self.epoch and self.phase == 'thinking':
                 self.phase = 'idle' if self.fresh() else 'disconnected'
+                self.clear_busy_advisory()
 
     async def wait_work(self):
         if self.work:
