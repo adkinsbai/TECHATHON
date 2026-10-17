@@ -24,6 +24,11 @@ $target = Join-Path $app "models\$model"
 New-Item -ItemType Directory -Force $target | Out-Null
 Copy-Item (Join-Path $ModelsDir "$model\*") $target -Recurse -Force
 Copy-Item (Join-Path $PSScriptRoot 'README-team-test.txt') (Join-Path $app 'README.txt') -Force
+# 版本号：设置页显示；启动时用来发现并替换正在运行的旧版。
+$buildCommit = (git -C $repo rev-parse --short HEAD).Trim()
+if (git -C $repo status --porcelain --untracked-files=no) { $buildCommit += '+改动' }
+@{ commit = $buildCommit; built = (Get-Date -Format 'yyyy-MM-dd HH:mm') } | ConvertTo-Json |
+    Set-Content -LiteralPath (Join-Path $app 'build-info.json') -Encoding UTF8
 
 $zip = Join-Path $OutDir 'Xiaonuan-team-test.zip'
 if (Test-Path $zip) { Remove-Item $zip }

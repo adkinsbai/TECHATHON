@@ -46,7 +46,7 @@
 <body>
 <main>
   <h1>小暖设置</h1>
-  <p class="sub">按顺序把下面几项变成绿色，就可以和小暖说话了。这个页面会自动刷新状态。</p>
+  <p class="sub">按顺序把下面几项变成绿色，就可以和小暖说话了。这个页面会自动刷新状态。<br>版本：<span id="ver">—</span></p>
 
   <section class="step">
     <div class="head"><h2>① DeepSeek 密钥</h2><span class="pill" id="p-key">检查中</span></div>
@@ -116,6 +116,7 @@ async function refresh() {
   try { s = await (await fetch("/api/setup/status")).json(); }
   catch { pill("p-board", "bad", "小暖没在运行"); return; }
   $("home").textContent = s.home;
+  $("ver").textContent = s.version || "旧版";
   s.key_set ? pill("p-key", "ok", "已设置") : pill("p-key", "bad", "未设置");
 
   if (s.models_ready) { pill("p-model", "ok", "已就绪"); $("b-model").textContent = "已内置在程序里，不需要下载。"; }
@@ -185,7 +186,7 @@ $("save-sites").onclick = async () => {
 };
 $("hot").onclick = () => post("/api/setup/open-hotspot").catch(() => {});
 refresh();
-setInterval(refresh, 2000);
+setInterval(refresh, 500);
 </script>
 </body>
 </html>

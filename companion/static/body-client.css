@@ -30,3 +30,4 @@
 @media (max-width: 700px) { .body-panel { left: 12px; bottom: auto; top: 12px; width: 218px; max-width: calc(100vw - 110px); }
   .body-panel:not([open]) summary { padding: 8px 12px; min-height: 36px; } .body-panel[open] { width: 270px; max-width: calc(100vw - 24px); } }
 @media (prefers-reduced-motion: reduce) { .body-chevron { transition: none; } }
+.body-panel .body-setup-link{display:inline-block;margin-top:8px;font-size:13px;color:inherit;opacity:.8}

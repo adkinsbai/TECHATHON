@@ -6,9 +6,10 @@ import pathlib
 import socket
 import subprocess
 import sys
+import time
 
 import httpx
-from fastapi import HTTPException
+from fastapi import HTTPException, Request
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
@@ -33,7 +34,19 @@ def _local_ipv4():
         return []
 
 
+_firewall_cache = {"at": 0.0, "value": None}
+
+
 def _firewall_rule_exists(port):
+    """设置页每 0.5 秒刷新一次；防火墙查询要起 netsh，结果缓存 5 秒。"""
+    now = time.monotonic()
+    if now - _firewall_cache["at"] < 5:
+        return _firewall_cache["value"]
+    _firewall_cache.update(at=now, value=_query_firewall_rule(port))
+    return _firewall_cache["value"]
+
+
+def _query_firewall_rule(port):
     try:
         r = subprocess.run(["netsh", "advfirewall", "firewall", "show", "rule", f"name={FIREWALL_RULE}"],
                            capture_output=True, timeout=10, creationflags=NO_WINDOW)
@@ -53,7 +66,8 @@ def _save_key(env_path: pathlib.Path, key: str):
     os.replace(tmp, env_path)
 
 
-def attach_setup_routes(app, *, home, link, hub, brain, config, body_port):
+def attach_setup_routes(app, *, home, link, hub, brain, config, body_port, bridge=None, version="",
+                        request_shutdown=None):
     home = pathlib.Path(home)
 
     @app.get("/setup")
@@ -63,12 +77,14 @@ def attach_setup_routes(app, *, home, link, hub, brain, config, body_port):
     @app.get("/api/setup/status")
     async def setup_status():
         ips = _local_ipv4()
-        body = hub.snapshot()
+        # 有桥接对象时直接读它的实时状态（hub 里的状态每 2 秒才由心跳更新一次，短按会看不到）。
+        body = bridge.snapshot() if bridge is not None else hub.snapshot()
         snap = link.snapshot()
         models_ready = (pathlib.Path(config.MODELS_DIR)
                         / "sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2025-09-09" / "model.int8.onnx").exists()
         return {
             "app": "xiaonuan",
+            "version": version,
             "key_set": bool(brain.DEEPSEEK_API_KEY),
             "models_ready": models_ready,
             "models_dir": str(config.MODELS_DIR),
@@ -87,6 +103,14 @@ def attach_setup_routes(app, *, home, link, hub, brain, config, body_port):
             "sites": hub.settings()["sites"],
             "events": [f"{t}  {msg}" for t, msg in snap["events"][-6:]],
         }
+
+    @app.post("/api/setup/shutdown")
+    async def setup_shutdown(request: Request):
+        """新版启动时请旧版退出。自定义请求头使网页无法跨站触发。"""
+        if request.headers.get("x-xiaonuan") != "takeover" or request_shutdown is None:
+            raise HTTPException(403, "不允许")
+        request_shutdown()
+        return {"ok": True}
 
     @app.post("/api/setup/key")
     async def setup_key(body: KeyIn):
@@ -114,6 +138,7 @@ def attach_setup_routes(app, *, home, link, hub, brain, config, body_port):
         args = (f'advfirewall firewall add rule name="{FIREWALL_RULE}" dir=in action=allow '
                 f'protocol=TCP localport={body_port} remoteip=localsubnet profile=any')
         code = ctypes.windll.shell32.ShellExecuteW(None, "runas", "netsh", args, None, 0)
+        _firewall_cache["at"] = 0.0   # 下次刷新立即重新查询
         if code <= 32:
             raise HTTPException(400, "没有获得管理员确认，防火墙没有改动")
         return {"ok": True}
