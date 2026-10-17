@@ -213,6 +213,7 @@ def attach_body_routes(app, hub, reply_stream, voice=None):
         try:
             audio = await voice.tts_wav(body.text, persona.get("voice") or None)
         except Exception as exc:
+            print("实体语音合成失败：", repr(exc), flush=True)
             raise HTTPException(503, "语音合成失败") from exc
         return Response(audio, media_type="audio/wav")
 

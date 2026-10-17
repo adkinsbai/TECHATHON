@@ -32,6 +32,21 @@
 - 扬声器默认 **10% PCM 振幅**，0% 静音；24kHz、16-bit、双声道播放。当前硬件半双工，播放时不录音，再次按压可打断。
 - 实体在线时接管自动语音，网页保留同一份文字和表情。录音上限 15 秒；断线丢弃未完成录音和旧语音。
 
+## 团队测试版（Xiaonuan.exe，免装 Python）
+
+测试电脑只需解压 `Xiaonuan-team-test.zip`，打开 Windows 移动热点（2.4GHz），双击 `Xiaonuan.exe`，在自动打开的 `http://127.0.0.1:8765/setup` 页填 DeepSeek 密钥、一键放行防火墙，等板子变绿即可。压缩包内置 Python 3.12、依赖和 SenseVoice 识别模型；聊天数据和密钥保存在 `%APPDATA%\Xiaonuan`，不在程序目录里。详细步骤见 [packaging/README-team-test.txt](packaging/README-team-test.txt)。
+
+板子用 USB 烧录时把 `firmware/wifi.json` 的 `host` 设为 `192.168.137.1`（Windows 移动热点里电脑的固定地址），`ssid`/`password` 填测试电脑的热点。
+
+打包（在装好依赖和 `pyinstaller` 的 Python 3.12 上）：
+
+```powershell
+cd companion; python -m voice_pack.download --models-dir D:\xiaonuan-models; cd ..
+.\packaging\build_app.ps1 -ModelsDir D:\xiaonuan-models -OutDir D:\xiaonuan-build
+```
+
+源码运行同一个入口：`python -m xiaonuan_app`。
+
 ## 运行已有的小暖
 
 当前电脑已有原应用时，继续使用原来的 Companion 根目录，保留它的 `.env`、`data/`、人设和模型。不要用新克隆的空数据目录替换原应用。
