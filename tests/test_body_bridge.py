@@ -332,16 +332,56 @@ class RuntimeTests(unittest.IsolatedAsyncioTestCase):
         sensors = self.bridge.snapshot()['sensors']
         self.assertEqual([s['calibrated'] for s in sensors], [True, False])
 
-    async def test_other_sensor_release_does_not_end_recording(self):
+    def two_hands(self):
         self.bridge.pressure = Pressure(calibration_samples=3, debounce=.1)
         self.bridge.pressure2 = Pressure(calibration_samples=3, debounce=.1, rest_min=2500)
-        # 按住传感器 1 开始录音；传感器 2 短按后松开，不能结束传感器 1 的录音。
-        await self.feed_two([(0, 4095, 4095), (.1, 4095, 4095), (.2, 4095, 4095),
-                             (.3, 2500, 4095), (.41, 2500, 4095),
-                             (.5, 2500, 2500), (.61, 2500, 2500), (.7, 2500, 4090), (.81, 2500, 4090)])
+        return [(0, 4095, 4095), (.1, 4095, 4095), (.2, 4095, 4095)]
+
+    async def test_right_then_left_together_is_a_hug_and_drops_the_recording(self):
+        rest = self.two_hands()
+        await self.feed_two(rest + [(.3, 2500, 4095), (.41, 2500, 4095),      # 右手按下：开始录音
+                                    (.6, 2500, 2500), (.71, 2500, 2500),      # 0.3 秒后左手也按下：抱抱
+                                    (2.0, 4095, 4095), (2.11, 4095, 4095)])   # 两只手都松开
+        self.assertEqual([c[0] for c in self.client.calls], ['touch'])
+        hug = self.client.calls[0][1]
+        self.assertEqual(hug['kind'], 'hug')
+        self.assertNotIn('sensor', hug)
+        self.assertAlmostEqual(hug['duration'], 2.11 - .41, places=2)
+        self.assertGreater(hug['strength'], 0)
+        self.assertIn(('mode', 2), self.link.sent)
+        self.assertEqual(self.link.sent[-1], ('mode', 0))
+
+    async def test_left_then_right_together_is_a_hug(self):
+        rest = self.two_hands()
+        await self.feed_two(rest + [(.3, 4095, 2500), (.41, 4095, 2500),
+                                    (.9, 2500, 2500), (1.01, 2500, 2500),
+                                    (1.5, 4095, 4095), (1.61, 4095, 4095)])
+        self.assertEqual([(c[0], c[1]['kind']) for c in self.client.calls], [('touch', 'hug')])
+        self.assertNotIn(('mode', 2), self.link.sent)
+
+    async def test_left_hand_never_records_even_when_held(self):
+        rest = self.two_hands()
+        await self.feed_two(rest + [(.3, 4095, 2500), (.41, 4095, 2500), (3.0, 4095, 4090), (3.11, 4095, 4090)])
+        self.assertEqual(len(self.client.calls), 1)
+        touch = self.client.calls[0][1]
+        self.assertEqual((touch['kind'], touch['sensor']), ('touch', 2))
+        self.assertAlmostEqual(touch['duration'], 3.11 - .41, places=2)
+        self.assertNotIn(('mode', 2), self.link.sent)
+
+    async def test_late_left_touch_does_not_interrupt_talking(self):
+        rest = self.two_hands()
+        await self.feed_two(rest + [(.3, 2500, 4095), (.41, 2500, 4095),
+                                    (2.0, 2500, 2500), (2.11, 2500, 2500), (2.5, 2500, 4090), (2.61, 2500, 4090)])
         self.assertEqual(self.bridge.phase, 'recording')
-        self.assertEqual(self.bridge.active_sensor, 1)
         self.assertEqual(self.client.calls, [])
+
+    async def test_holding_left_then_pressing_right_later_starts_talking(self):
+        rest = self.two_hands()
+        await self.feed_two(rest + [(.3, 4095, 2500), (.41, 4095, 2500), (2.0, 2500, 2500), (2.11, 2500, 2500)])
+        self.assertEqual(self.bridge.phase, 'recording')
+        self.bridge.feed_mic(bytes(4800))
+        await self.feed_two([(3.0, 4095, 2500), (3.11, 4095, 2500), (3.5, 4095, 4095), (3.61, 4095, 4095)])
+        self.assertEqual([c[0] for c in self.client.calls], ['asr', 'chat'])
 
     async def test_old_single_sensor_frames_still_work(self):
         self.bridge.pressure = Pressure(calibration_samples=3, debounce=.1)

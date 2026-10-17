@@ -83,6 +83,53 @@ class Capture:
                  'sensor': self.active_sensor}
         self.work = asyncio.create_task(self._submit(pcm, touch, epoch))
 
+    async def cancel_recording(self):
+        """丢掉正在录的音（例如右手刚按下就变成了抱抱），不送识别。"""
+        if self.phase != 'recording':
+            return
+        self.capture = bytearray()
+        self.capture_id += 1
+        self.phase = 'idle'
+        try:
+            await self.send(self.link.set_mode, 0)
+        except Exception as exc:
+            self.phase, self.error = 'disconnected', str(exc)[:240]
+
+    async def physical(self, kind, duration, strength, sensor=None):
+        """左手触碰或抱抱：不录音，直接告诉同一个小暖；会打断正在播放的回复。"""
+        if not self.fresh():
+            return
+        if self.work and not self.work.done():
+            if not self.error:
+                self.error = BUSY_ADVISORY
+            return
+        self.clear_busy_advisory()
+        self.play_token += 1
+        if self.play_task:
+            self.play_task.cancel()
+            await asyncio.gather(self.play_task, return_exceptions=True)
+        self.clear_speech()
+        event = {'event_id': uuid.uuid4().hex, 'kind': kind,
+                 'duration': round(min(15.0, max(0.0, duration)), 3),
+                 'strength': round(min(1.0, max(0.0, strength)), 4)}
+        if sensor is not None:
+            event['sensor'] = sensor
+        self.phase = 'thinking'
+        epoch = self.epoch
+        self.work = asyncio.create_task(self._submit_physical(event, epoch))
+
+    async def _submit_physical(self, event, epoch):
+        try:
+            await asyncio.wait_for(self.client.touch(event), 95)
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            self.error = str(exc)[:240]
+        finally:
+            if epoch == self.epoch and self.phase == 'thinking':
+                self.phase = 'idle' if self.fresh() else 'disconnected'
+                self.clear_busy_advisory()
+
     async def _submit(self, pcm, touch, epoch):
         try:
             if touch['duration'] < .35:

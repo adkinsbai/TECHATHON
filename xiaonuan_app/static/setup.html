@@ -85,11 +85,11 @@
   </section>
 
   <section class="step">
-    <div class="head"><h2>⑥ 压力传感器位置</h2><span class="pill" id="p-sens">检查中</span></div>
-    <div class="body">给两个传感器起名字（装在哪里），小暖被碰时就知道是哪里。按一下传感器，看下面哪一行变成“按住”。</div>
-    <div class="row"><input id="site1" maxlength="12" placeholder="GPIO8 的位置，例如：头顶"><span class="reading" id="r1">—</span></div>
-    <div class="row"><input id="site2" maxlength="12" placeholder="GPIO9 的位置，例如：手"><span class="reading" id="r2">—</span></div>
-    <div class="row"><button id="save-sites">保存位置</button></div>
+    <div class="head"><h2>⑥ 两只手（压力传感器）</h2><span class="pill" id="p-sens">检查中</span></div>
+    <div class="body"><b>右手（GPIO8）按住说话</b>，<b>左手（GPIO9）只感知触碰</b>，<b>两只手一起握住就是抱抱</b>。按一下传感器，看下面哪一行变成“按住”，确认左右没有接反。名字可以改，作用不变。</div>
+    <div class="row"><input id="site1" maxlength="12" placeholder="GPIO8：右手（按住说话）"><span class="reading" id="r1">—</span></div>
+    <div class="row"><input id="site2" maxlength="12" placeholder="GPIO9：左手（只感知触碰）"><span class="reading" id="r2">—</span></div>
+    <div class="row"><button id="save-sites">保存名字</button></div>
     <div class="msg" id="m-sens"></div>
   </section>
 
@@ -139,7 +139,7 @@ async function refresh() {
   }
   $("b-board").textContent = text;
 
-  const sites = s.sites || ["部位1", "部位2"];
+  const sites = s.sites || ["右手", "左手"];
   for (const i of [1, 2]) {
     const input = $("site" + i);
     if (document.activeElement !== input && !input.dataset.dirty) input.value = sites[i - 1];
@@ -174,7 +174,7 @@ $("fw").onclick = async () => {
 for (const i of [1, 2]) $("site" + i).addEventListener("input", e => { e.target.dataset.dirty = "1"; });
 $("save-sites").onclick = async () => {
   const sites = [$("site1").value.trim(), $("site2").value.trim()];
-  if (!sites[0] || !sites[1]) { $("m-sens").className = "msg bad"; $("m-sens").textContent = "两个位置都要填"; return; }
+  if (!sites[0] || !sites[1]) { $("m-sens").className = "msg bad"; $("m-sens").textContent = "两个名字都要填"; return; }
   try {
     const r = await fetch("/api/body/settings", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sites }) });
     if (!r.ok) throw new Error("保存失败（" + r.status + "）");

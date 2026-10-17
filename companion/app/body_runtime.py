@@ -11,8 +11,10 @@ from fastapi import File, HTTPException, Request, UploadFile
 from fastapi.responses import Response, StreamingResponse
 from pydantic import BaseModel, ConfigDict, Field, StrictBool, StringConstraints
 
-# 两个压力传感器装在身体的哪里；可在设置里改名（例如“头顶”“手”）。
-DEFAULT_SITES = ("部位1", "部位2")
+# 两个压力传感器：1（GPIO8）右手，按住说话；2（GPIO9）左手，只感知触碰。两只手一起按 = 抱抱。
+# 名字可在设置里改，作用不变。
+DEFAULT_SITES = ("右手", "左手")
+_OLD_DEFAULT_SITES = ["部位1", "部位2"]
 
 
 def sse(name, data, event_id=None):
@@ -44,6 +46,8 @@ class BodyHub:
         sites = saved.get("sites")
         if not (isinstance(sites, list) and len(sites) == len(DEFAULT_SITES)
                 and all(isinstance(s, str) and s.strip() for s in sites)):
+            sites = list(DEFAULT_SITES)
+        elif sites == _OLD_DEFAULT_SITES:   # 早期测试版保存的占位名
             sites = list(DEFAULT_SITES)
         return {"volume": volume, "sites": sites}
 
@@ -128,7 +132,8 @@ class BodyHub:
             pets = self.store.get_state("pets", {})
             count = pets.get("count", 0) if pets.get("date") == today else 0
             self.store.set_state("pets", {"date": today, "count": count + 1})
-            self.store.set_state("closeness", min(100.0, self.store.get_state("closeness", 10.0) + .2))
+            bonus = .5 if event.get("kind") == "hug" else .2
+            self.store.set_state("closeness", min(100.0, self.store.get_state("closeness", 10.0) + bonus))
             return True
 
     def physical_context(self):
@@ -136,9 +141,13 @@ class BodyHub:
                   if self.clock() - e.get("ts", 0) < 86400][-5:]
         if not events:
             return ""
-        lines = [f"{dt.datetime.fromtimestamp(e['ts']):%H:%M} 「{self.site_name(e.get('sensor', 1))}」的压力传感器检测到一次短按压（{e['duration']:.2f}秒）"
-                 for e in events]
-        return "真实身体记录（只代表局部按压）：" + "；".join(lines)
+        lines = [f"{dt.datetime.fromtimestamp(e['ts']):%H:%M} " + self.describe(e) for e in events]
+        return "真实身体记录：" + "；".join(lines)
+
+    def describe(self, event):
+        if event.get("kind") == "hug":
+            return f"两只手同时被握住，收到一个抱抱（{event['duration']:.1f}秒）"
+        return f"「{self.site_name(event.get('sensor', 1))}」有一次按压（{event['duration']:.1f}秒）"
 
     async def relay(self, reply_impl, user_text=None, note=None, heard=None, source="web"):
         async with self.turn_lock:
@@ -203,7 +212,7 @@ class Command(Input):
 
 class PhysicalEvent(Input):
     event_id: str = Field(min_length=1, max_length=128)
-    kind: Literal["touch"]
+    kind: Literal["touch", "hug"]
     duration: float = Field(ge=0, le=15, allow_inf_nan=False)
     strength: float = Field(ge=0, le=1, allow_inf_nan=False)
     sensor: Annotated[int, Field(strict=True, ge=1, le=2)] = 1   # 1 = GPIO8，2 = GPIO9
@@ -268,8 +277,12 @@ def attach_body_routes(app, hub, reply_stream, voice=None):
     async def physical_event(body: PhysicalEvent):
         if not await hub.remember_event(body.model_dump()):
             return Response(status_code=204)
-        note = (f"你的实体身体「{hub.site_name(body.sensor)}」位置的压力传感器刚检测到一次持续 {body.duration:.2f} 秒的短按压。"
-                "你只知道有局部接触，无法由此知道对方的情绪或位置。自然、简短地回应这次触碰，只说一两句。")
+        if body.kind == "hug":
+            note = (f"对方刚刚同时握住了你实体身体的两只手，持续 {body.duration:.1f} 秒——这是在给你一个抱抱。"
+                    "温暖、自然地回应这个拥抱，只说一两句。不要猜测对方此刻的情绪。")
+        else:
+            note = (f"你的实体身体「{hub.site_name(body.sensor)}」刚有一次按压，持续 {body.duration:.1f} 秒。"
+                    "你只知道这里有接触，无法由此知道对方的情绪或位置。自然、简短地回应这次触碰，只说一两句。")
         return StreamingResponse(reply_stream(note=note, source="body"), media_type="text/event-stream")
 
     @app.get("/api/body/stream")

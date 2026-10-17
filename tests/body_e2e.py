@@ -145,8 +145,7 @@ async def verify(args, output):
             assert 499 <= amplitude <= 501, f"expected 10% amplitude500, got {amplitude}"
             board.audio.clear()
 
-            # Second pressure sensor (GPIO9): a short press is reported with its configured site name.
-            await http.patch("/api/body/settings", json={"sites": ["头顶", "手"]})
+            # Left hand (GPIO9): a touch is reported with its default site name, never recorded.
 
             async def both_calibrated():
                 sensors = (await state()).get("sensors") or []
@@ -163,7 +162,24 @@ async def verify(args, output):
                 return result["tts_count"] > touches_before and len(board.audio) > 0 and board.mode == 0
 
             await eventually(touched_site, "second sensor press did not produce physical response")
-            assert "「手」" in (await fixture_stats())["last_task"], "second sensor site missing from the model note"
+            assert "「左手」" in (await fixture_stats())["last_task"], "left-hand site missing from the model note"
+            board.audio.clear()
+
+            # Both hands pressed together is a hug: the right hand's recording is dropped, no ASR.
+            hugs_before = (await fixture_stats())["tts_count"]
+            board.raw = 2500
+            await asyncio.sleep(.3)
+            board.raw2 = 2500
+            await asyncio.sleep(.6)
+            board.raw = board.raw2 = 4095
+
+            async def hugged():
+                result = await fixture_stats()
+                return result["tts_count"] > hugs_before and len(board.audio) > 0 and board.mode == 0
+
+            await eventually(hugged, "two-hand hug did not produce physical response")
+            stats = await fixture_stats()
+            assert "抱抱" in stats["last_task"] and stats["asr_count"] == 0, "hug must reach the model without ASR"
             board.audio.clear()
             tts_base = (await fixture_stats())["tts_count"]
 
@@ -215,7 +231,7 @@ async def verify(args, output):
             await eventually(calibrated, "reconnected device did not recalibrate")
             await asyncio.sleep(.8)
             assert not board.audio, "old speech replayed after device reconnect"
-            result = {"real_hardware": False, "pressure_touch": True, "second_sensor_site_touch": True,
+            result = {"real_hardware": False, "pressure_touch": True, "left_hand_touch": True, "two_hand_hug": True,
                       "hold_release_asr_chat_tts": True,
                       "same_history": True, "default_volume": 10, "measured_test_pcm_amplitude": amplitude,
                       "web_reply_routes_to_body": True, "zero_mutes": True, "reconnect_discards_old_speech": True,

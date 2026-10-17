@@ -202,7 +202,7 @@ class BodyHttpTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_sensor_sites_default_validate_and_save(self):
         result = (await self.client.get("/api/body/status")).json()
-        self.assertEqual(result["settings"]["sites"], ["部位1", "部位2"])
+        self.assertEqual(result["settings"]["sites"], ["右手", "左手"])
         for bad in [{}, {"sites": ["头"]}, {"sites": ["", "手"]}, {"sites": ["头", "x" * 13]}]:
             self.assertEqual((await self.client.patch("/api/body/settings", json=bad)).status_code, 422)
         result = await self.client.patch("/api/body/settings", json={"sites": [" 头顶 ", "手"]})
@@ -232,6 +232,31 @@ class BodyHttpTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual((await client.post("/api/body/event", json={"event_id": "s3", "kind": "touch",
                               "duration": .1, "strength": .4, "sensor": 3})).status_code, 422)
         self.assertIn("「手」", self.hub.physical_context())
+
+    async def test_hug_event_note_and_context(self):
+        notes = []
+
+        async def reply(user_text=None, note=None, heard=None, source="web"):
+            notes.append(note)
+            yield sse("done", {"text": "ok", "emotion": "happy"})
+
+        app = FastAPI()
+        attach_body_routes(app, self.hub, reply, voice=self.voice)
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://127.0.0.1") as client:
+            r = await client.post("/api/body/event", json={"event_id": "h1", "kind": "hug", "duration": 2.5,
+                                                            "strength": .5})
+            self.assertEqual(r.status_code, 200)
+            r = await client.post("/api/body/event", json={"event_id": "l1", "kind": "touch", "duration": .2,
+                                                            "strength": .5, "sensor": 2})
+        self.assertIn("抱抱", notes[0])
+        self.assertIn("「左手」", notes[1])
+        context = self.hub.physical_context()
+        self.assertIn("抱抱", context)
+        self.assertIn("「左手」", context)
+
+    def test_old_placeholder_site_names_become_hands(self):
+        self.store.set_state("body_settings", {"volume": 20, "sites": ["部位1", "部位2"]})
+        self.assertEqual(self.hub.settings(), {"volume": 20, "sites": ["右手", "左手"]})
 
     async def test_heartbeat_delivers_commands_once(self):
         self.assertEqual((await self.client.post("/api/body/command", json={"command": "record_start"})).status_code, 409)
