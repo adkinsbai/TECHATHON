@@ -40,7 +40,7 @@ FSR_PIN = 8                     # 力传感器信号 -> GPIO8 (ADC1_CH7)
 
 # ------------------------------------------------------------------ 音频
 RATE = 24000
-RING_SECONDS = 1.0
+RING_SECONDS = 2.0                      # 2 秒：给"提前量 1 秒 + 网络抖动"留出余量，避免冲满丢帧
 BUF_SIZE = int(RATE * 4 * RING_SECONDS)     # 立体声 16bit：4 字节/帧 -> 96 KB
 WRITE_CHUNK = 4096                          # 每次交给 I2S 的字节数
 MIC_READ = 2048                             # 每次从麦克风读进来的字节数

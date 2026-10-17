@@ -466,6 +466,7 @@ class Player:
         cur = None
         last_send = None
         prev_playing = False
+        mode_conn = -1
         while True:
             with self.lock:
                 state = self.state
@@ -486,8 +487,10 @@ class Player:
                 self.wake.wait(0.3)
                 self.wake.clear()
                 continue
-            if not prev_playing:                       # 开始/恢复播放
+            # 开始/恢复播放，或者板子重连过（重连会回到 IDLE），都要重新发 MODE_PLAY
+            if not prev_playing or self.link.conn_id != mode_conn:
                 self.link.set_mode(MODE_PLAY)
+                mode_conn = self.link.conn_id
                 pace_start = time.monotonic()
                 pace_bytes = 0
                 last_send = None
@@ -551,8 +554,10 @@ class Player:
                 self._stage("send idx=%d" % idx)
                 if not self.link.send_audio(piece):
                     self._stage("idle")
-                    time.sleep(0.2)
-                    continue
+                    # 连接断了：回到外层等重连，并且让外层重新发 MODE_PLAY
+                    # （以前在这里原地重试，重连后板子还是 IDLE，就变成"显示播放但没声音"）
+                    prev_playing = False
+                    break
                 self._stage("idle")
                 off += len(piece)
                 pace_bytes += len(piece)
@@ -568,10 +573,12 @@ class Player:
                 # 自适应节流：板子缓冲 >75% 说明发快了（多睡一点），<25% 说明发慢了（少睡一点），
                 # 目标是把板子的环形缓冲稳定在 50% 左右 —— 既不溢出也不断粮。
                 fill = self.link.stats.get("fill", 50)
-                if fill > 75:
-                    self.lead = min(1.2, self.lead + 0.01)
-                elif fill < 25:
+                # 提前量越大 = 电脑端越"抢跑" = 板子缓冲越高。
+                # 所以缓冲太满要减小提前量，太空要加大（之前写反了，导致缓冲在 0 和 100% 之间振荡）
+                if fill > 65:
                     self.lead = max(0.15, self.lead - 0.01)
+                elif fill < 35:
+                    self.lead = min(1.5, self.lead + 0.01)
                 target = pace_bytes / 4.0 / RATE - self.lead
                 elapsed = time.monotonic() - pace_start
                 self.pace = (pace_bytes / 4.0 / RATE, elapsed, target)

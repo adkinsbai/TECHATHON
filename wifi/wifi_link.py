@@ -91,6 +91,7 @@ class Link:
         self.bind_error = ""
         self.bad_frames = 0
         self.force = {}
+        self.conn_id = 0          # 每次有新连接就 +1，用来发现"板子重连了"
         threading.Thread(target=self._serve, daemon=True).start()
 
     # ------------------------------------------------------------- 日志
@@ -138,6 +139,7 @@ class Link:
                         pass
                 self.client = c
                 self.client_addr = "%s:%d" % addr
+                self.conn_id += 1
             self.log("板子已连上：%s" % self.client_addr)
             threading.Thread(target=self._reader, args=(c,), daemon=True).start()
 
@@ -219,18 +221,21 @@ class Link:
 
     # ------------------------------------------------------------- 发送
     def send(self, mtype, payload=b""):
-        if self.client is None:
+        c = self.client
+        if c is None:
             return False
         frame = build_frame(mtype, payload)
         try:
             with self.send_lock:
-                self.client.sendall(frame)
+                c.sendall(frame)
             self.tx_bytes += len(frame)
             return True
         except OSError as exc:
             self.log("发送失败：%s（等板子重连）" % exc)
             with self.state_lock:
-                self.client = None
+                # 只清掉"自己用的那条"旧连接，别把刚重连上来的新 socket 顶掉
+                if self.client is c:
+                    self.client = None
             return False
 
     def send_audio(self, pcm):
