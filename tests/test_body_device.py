@@ -127,5 +127,14 @@ class SerialProtocolTests(unittest.TestCase):
         board = self.board(b'')
         with self.assertRaises(device.DeployError): board.info('user.py')
 
+    def test_reboot_requests_normal_hardware_boot_instead_of_raw_soft_reset(self):
+        from types import SimpleNamespace
+        calls = []
+        board = device.SerialBoard.__new__(device.SerialBoard)
+        board.serial = object()
+        board.api = SimpleNamespace(raw_exec=lambda serial, code, wait: calls.append(code))
+        board.reboot()
+        self.assertEqual(calls, ['import machine\nmachine.reset()\n'])
+
 
 if __name__ == '__main__': unittest.main()

@@ -93,8 +93,9 @@ class SerialBoard:
             raise DeployError('%s 写入失败' % name)
 
     def reboot(self):
+        # raw REPL 的 soft_reset 会继续停在 raw 模式并跳过 main.py；硬复位才正常开机。
         # 复位后的启动日志可能含网络名；不输出原始回包。
-        self.api.raw_exec(self.serial, "import machine\nmachine.soft_reset()\n", wait=2)
+        self.api.raw_exec(self.serial, "import machine\nmachine.reset()\n", wait=2)
 
     def close(self):
         self.serial.close()
