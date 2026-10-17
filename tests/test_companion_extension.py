@@ -1,6 +1,8 @@
 import asyncio
 import json
+import io
 import unittest
+import wave
 
 import httpx
 from fastapi import FastAPI
@@ -53,6 +55,14 @@ class BodyRuntimeTests(unittest.IsolatedAsyncioTestCase):
         await self.online()
         self.hub.command("record_start")
         self.assertEqual(self.hub.take_commands()[0]["command"], "record_start")
+        self.assertEqual(self.hub.take_commands(), [])
+
+    async def test_expired_commands_do_not_start_recording_on_restored_heartbeat(self):
+        await self.online()
+        self.hub.command("record_start")
+        self.now += 11
+        self.assertFalse(self.hub.snapshot()["connected"])
+        await self.hub.update_status({"connected": True})
         self.assertEqual(self.hub.take_commands(), [])
         self.hub.command("record_start")
         await self.hub.update_status({"connected": False})
@@ -131,11 +141,40 @@ class BodyRuntimeTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(queue.empty())
 
 
+class LocalVoice:
+    DEFAULT_LOCAL_VOICE = "local:3"
+
+    def __init__(self):
+        self.ready = True
+        self.calls = []
+
+    def local_asr_ready(self):
+        return self.ready
+
+    def local_tts_ready(self):
+        return self.ready
+
+    def _local_asr(self, audio):
+        self.calls.append("local_asr")
+        return {"text": "本地识别", "emotion": "平静", "event": ""}
+
+    def _local_tts(self, text, voice, speed):
+        self.calls.append(("local_tts", voice))
+        buffer = io.BytesIO()
+        with wave.open(buffer, "wb") as wav:
+            wav.setnchannels(1)
+            wav.setsampwidth(2)
+            wav.setframerate(24000)
+            wav.writeframes(b"\0\0" * 200)
+        return buffer.getvalue()
+
+
 class BodyHttpTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
         self.assertIsNotNone(BodyHub, "Companion physical body HTTP extension is missing")
         self.store = MemoryStore()
         self.hub = BodyHub(self.store)
+        self.voice = LocalVoice()
         self.replies = 0
 
         async def reply(user_text=None, note=None, heard=None, source="web"):
@@ -145,7 +184,7 @@ class BodyHttpTests(unittest.IsolatedAsyncioTestCase):
             yield sse("done", {"text": "I felt that touch", "emotion": "happy"})
 
         self.app = FastAPI()
-        attach_body_routes(self.app, self.hub, reply)
+        attach_body_routes(self.app, self.hub, reply, voice=self.voice)
         self.client = httpx.AsyncClient(transport=httpx.ASGITransport(app=self.app), base_url="http://127.0.0.1")
 
     async def asyncTearDown(self):
@@ -178,6 +217,21 @@ class BodyHttpTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(self.replies, 1)
         event["kind"] = "read_mind"
         self.assertEqual((await self.client.post("/api/body/event", json=event)).status_code, 422)
+
+    async def test_body_audio_calls_only_existing_local_helpers(self):
+        result = await self.client.post("/api/body/asr", files={"file": ("test.wav", b"test", "audio/wav")})
+        self.assertEqual(result.status_code, 200)
+        self.assertEqual(result.json()["text"], "本地识别")
+        result = await self.client.post("/api/body/tts", json={"text": "你好"})
+        self.assertEqual(result.status_code, 200)
+        self.assertEqual(result.headers["content-type"], "audio/wav")
+        self.assertEqual(self.voice.calls, ["local_asr", ("local_tts", "local:3")])
+
+    async def test_missing_local_models_fail_without_online_fallback(self):
+        self.voice.ready = False
+        self.assertEqual((await self.client.post("/api/body/tts", json={"text": "你好"})).status_code, 503)
+        self.assertEqual((await self.client.post("/api/body/asr", files={"file": ("test.wav", b"x")})).status_code, 503)
+        self.assertEqual(self.voice.calls, [])
 
 
 if __name__ == "__main__":

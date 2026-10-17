@@ -14,6 +14,7 @@
 .body-guide, .body-foot { color: var(--ink-soft, #8a7464); margin: 6px 0 14px; font-size: 12px; }
 .body-foot { font-size: 11px; margin-bottom: 0; }
 .body-pressure { display: flex; gap: 8px; align-items: center; margin: 14px 0; font-size: 12px; }
+.body-pressure > span { white-space: nowrap; }
 .body-pressure progress { width: 100%; min-width: 40px; height: 6px; accent-color: var(--accent, #e98a5d); }
 .body-pressure-text { white-space: nowrap; color: var(--ink-soft, #8a7464); }
 .body-volume { display: grid; grid-template-columns: 1fr auto; gap: 8px; font-size: 12px; }

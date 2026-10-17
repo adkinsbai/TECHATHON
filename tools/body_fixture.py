@@ -2,7 +2,6 @@
 import argparse
 import asyncio
 import io
-import math
 from pathlib import Path
 import shutil
 import struct
@@ -26,7 +25,9 @@ def main():
     parser.add_argument("--root", required=True, type=Path)
     parser.add_argument("--port", default=18765, type=int)
     args = parser.parse_args()
+    print("Preparing isolated source copy", flush=True)
     prepare(args.source, args.root)
+    print("Importing isolated Companion", flush=True)
     sys.path.insert(0, str(args.root.resolve()))
     from app import server, brain, voice
     import uvicorn
@@ -41,14 +42,14 @@ def main():
     async def fake_json(*args, **kwargs):
         return {"add": [], "update": [], "episode": "实体接口测试"}
 
-    async def fake_asr(data, filename="body.wav"):
+    def fake_asr(data, filename="body.wav"):
         with wave.open(io.BytesIO(data), "rb") as wav:
             state["last_audio"] = {"rate": wav.getframerate(), "channels": wav.getnchannels(),
                                    "width": wav.getsampwidth(), "frames": wav.getnframes()}
         state["asr_count"] += 1
         return {"text": "小暖你好，实体连接测试", "emotion": "平静", "event": ""}
 
-    async def fake_tts(text, *args, **kwargs):
+    def fake_tts(text, *args, **kwargs):
         state["tts_count"] += 1
         buf = io.BytesIO()
         # Exactly +/-5000, therefore expected hardware amplitude at 10% is +/-500.
@@ -62,13 +63,22 @@ def main():
 
     brain.stream_chat = fake_chat
     brain.complete_json = fake_json
-    voice.asr, voice.tts, voice.warm_up = fake_asr, fake_tts, lambda: None
+    async def asr(data, filename="body.wav"):
+        return fake_asr(data, filename)
+
+    async def tts(text, *args, **kwargs):
+        return fake_tts(text, *args, **kwargs)
+
+    voice.asr, voice.tts, voice.warm_up = asr, tts, lambda: None
+    voice._local_asr, voice._local_tts = fake_asr, fake_tts
+    voice.local_asr_ready = voice.local_tts_ready = lambda: True
 
     @server.app.get("/__fixture")
     async def fixture_state():
         return state
 
-    uvicorn.run(server.app, host="127.0.0.1", port=args.port, log_level="warning")
+    print("Starting isolated HTTP service", flush=True)
+    uvicorn.run(server.app, host="127.0.0.1", port=args.port, log_level="info")
 
 
 if __name__ == "__main__":

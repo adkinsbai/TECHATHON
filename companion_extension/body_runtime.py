@@ -7,7 +7,7 @@ import time
 from typing import Annotated, Literal
 import uuid
 
-from fastapi import HTTPException, Request
+from fastapi import File, HTTPException, Request, UploadFile
 from fastapi.responses import Response, StreamingResponse
 from pydantic import BaseModel, ConfigDict, Field, StrictBool
 
@@ -54,10 +54,12 @@ class BodyHub:
         return result
 
     async def update_status(self, status):
+        # Expired commands belong to the old connection, even if a fresh
+        # heartbeat is the first evidence of the reconnect.
+        if not self.snapshot()["connected"] or not status.get("connected"):
+            self._commands.clear()
         self._status = {"phase": "idle", "pressed": False, **status}
         self._last_seen = self.clock()
-        if not status.get("connected"):
-            self._commands.clear()
         await self.publish("status", self.snapshot())
 
     def command(self, command):
@@ -181,7 +183,39 @@ class PhysicalEvent(Input):
     strength: float = Field(ge=0, le=1, allow_inf_nan=False)
 
 
-def attach_body_routes(app, hub, reply_stream):
+class LocalSpeech(Input):
+    text: str = Field(min_length=1, max_length=2000)
+
+
+def attach_body_routes(app, hub, reply_stream, voice=None):
+    @app.post("/api/body/asr")
+    async def local_asr(file: UploadFile = File(...)):
+        try:
+            if voice is None or not voice.local_asr_ready():
+                raise HTTPException(503, "电脑上的本地语音识别模型尚未就绪")
+            audio = await file.read(2_000_001)
+            if len(audio) > 2_000_000:
+                raise HTTPException(413, "录音过长，请控制在15秒以内")
+            try:
+                return await asyncio.to_thread(voice._local_asr, audio)
+            except Exception as exc:
+                raise HTTPException(503, "本地语音识别失败，请检查电脑上的模型和录音") from exc
+        finally:
+            await file.close()
+
+    @app.post("/api/body/tts")
+    async def local_tts(body: LocalSpeech):
+        if voice is None or not voice.local_tts_ready():
+            raise HTTPException(503, "电脑上的本地语音合成模型尚未就绪")
+        persona = hub.store.get_persona() if hasattr(hub.store, "get_persona") else {}
+        selected = persona.get("voice", "")
+        selected = selected if selected.startswith("local:") else voice.DEFAULT_LOCAL_VOICE
+        try:
+            audio = await asyncio.to_thread(voice._local_tts, body.text, selected, 1.0)
+        except Exception as exc:
+            raise HTTPException(503, "本地语音合成失败，请检查电脑上的模型") from exc
+        return Response(audio, media_type="audio/wav")
+
     @app.get("/api/body/status")
     async def status():
         return hub.snapshot()
