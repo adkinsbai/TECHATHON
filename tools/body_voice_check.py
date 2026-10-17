@@ -1,4 +1,4 @@
-"""Exercise the existing local speech models without chat writes or speaker playback."""
+"""Loop Xiaoyi TTS into local SenseVoice ASR without chat writes or speaker playback."""
 import argparse
 import io
 import json
@@ -28,7 +28,7 @@ def main():
         heard = asr.json().get('text', '')
         after = client.get('/api/status').json()
         assert heard and '本地' in heard, 'The local loopback did not recognize the test phrase'
-        print(json.dumps({'local_tts': True, 'local_asr': True, 'recognized_test_phrase': heard,
+        print(json.dumps({'xiaoyi_tts': True, 'local_asr': True, 'recognized_test_phrase': heard,
                           'tts_seconds': round(tts_seconds, 2), 'asr_seconds': round(asr_seconds, 2),
                           'audio': audio, 'chat_write_performed': False,
                           'message_count_before': before['message_count'],

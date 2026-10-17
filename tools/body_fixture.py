@@ -14,7 +14,10 @@ def prepare(source, root):
     from install_companion import _filesystem_path, install
     source, root = _filesystem_path(source), _filesystem_path(root)
     root.mkdir(parents=True, exist_ok=True)
-    for folder in ("app", "static"):
+    # voice_pack is source-only (models stay outside it) and only exists in newer Companions.
+    for folder in ("app", "static", "voice_pack"):
+        if folder == "voice_pack" and not (source / folder).is_dir():
+            continue
         shutil.copytree(source / folder, root / folder, dirs_exist_ok=True,
                         ignore=shutil.ignore_patterns("__pycache__", "*.pyc", ".env*", "interaction-log.json"))
     return install(root)
@@ -70,9 +73,9 @@ def main():
     async def tts(text, *args, **kwargs):
         return fake_tts(text, *args, **kwargs)
 
-    voice.asr, voice.tts, voice.warm_up = asr, tts, lambda: None
-    voice._local_asr, voice._local_tts = fake_asr, fake_tts
-    voice.local_asr_ready = voice.local_tts_ready = lambda: True
+    voice.asr, voice.tts, voice.tts_wav, voice.warm_up = asr, tts, tts, lambda: None
+    voice._local_asr = fake_asr
+    voice.local_asr_ready = lambda: True
 
     @server.app.get("/__fixture")
     async def fixture_state():

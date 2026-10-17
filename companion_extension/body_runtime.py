@@ -205,15 +205,15 @@ def attach_body_routes(app, hub, reply_stream, voice=None):
 
     @app.post("/api/body/tts")
     async def local_tts(body: LocalSpeech):
-        if voice is None or not voice.local_tts_ready():
-            raise HTTPException(503, "电脑上的本地语音合成模型尚未就绪")
+        # 玩偶和网页用同一个音色（人设默认微软·晓伊）；玩偶只认 WAV，由 voice.tts_wav 转好。
+        # 微软语音重试后仍失败就返回 503，这句不出声，不会换成别的声音。
+        if voice is None:
+            raise HTTPException(503, "语音合成未就绪")
         persona = hub.store.get_persona() if hasattr(hub.store, "get_persona") else {}
-        selected = persona.get("voice", "")
-        selected = selected if selected.startswith("local:") else voice.DEFAULT_LOCAL_VOICE
         try:
-            audio = await asyncio.to_thread(voice._local_tts, body.text, selected, 1.0)
+            audio = await voice.tts_wav(body.text, persona.get("voice") or None)
         except Exception as exc:
-            raise HTTPException(503, "本地语音合成失败，请检查电脑上的模型") from exc
+            raise HTTPException(503, "语音合成失败") from exc
         return Response(audio, media_type="audio/wav")
 
     @app.get("/api/body/status")

@@ -5,6 +5,7 @@ import argparse
 import hashlib
 import json
 import os
+import re
 from pathlib import Path
 import sys
 import tempfile
@@ -123,11 +124,87 @@ function stopSpeaking() {
             ('    } catch (e) {\n      console.warn("GLM TTS', '    } catch (e) {\n      if (speechCancelled()) return;\n      console.warn("GLM TTS'),
             ('  if (!window.speechSynthesis) return;', '  if (speechCancelled() || !window.speechSynthesis) return;'),
         )
+    # Later Companion versions add queue resets inside the already-patched stop function
+    # and drop the browser voice fallback, so recognise those by stable markers.
+    head = '\n'.join(edits[0][1].split('\n')[:3])
+    integrated = text.count(edits[0][1].split('\n')[0]) == 1
+    fallback = 7 if world else 5
     for index, (old, new) in enumerate(edits):
-        if text.count(new) == 1:
+        label = f'{"world" if world else "chat"} audio cancellation {index}'
+        marker = head if index == 0 else new
+        if text.count(marker) > 1:
+            raise InstallError(f'Duplicate installed anchor: {label}')
+        if text.count(marker) == 1 or (integrated and index == fallback and old not in text):
             continue
-        text = _replace(text, old, new, f'{"world" if world else "chat"} audio cancellation {index}')
+        if integrated and index == 0:
+            raise InstallError(f'Unsupported or ambiguous source anchor: {label}')
+        text = _replace(text, old, new, label)
     return text
+
+
+BODY_IMPORT = 'from .body_runtime import BodyHub, attach_body_routes'
+BODY_ROUTES = 'attach_body_routes(app, body_hub, _reply_stream, voice=voice)'
+REPLY_WRAPPER = '''async def _reply_stream(user_text=None, note=None, heard=None, source="web"):
+    async for chunk in body_hub.relay(_reply_stream_impl, user_text=user_text, note=note, heard=heard, source=source):
+        yield chunk
+
+
+''' + BODY_ROUTES + '''
+
+
+'''
+
+
+def _count(text, pattern):
+    return len(re.findall(pattern, text, re.M))
+
+
+def _server_patch(server):
+    """Patch an original server.py, or accept one whose body integration already exists.
+
+    Each step is skipped when its installed shape is present exactly once, so a
+    Companion that was integrated by hand (e.g. with extra reply parameters such
+    as ``tts``) is left as is instead of receiving duplicate definitions.
+    """
+    steps = (
+        # label, installed pattern, old anchor, new text
+        ('typing import', r'^from typing import (?:[\w, ]*\b)?Literal\b',
+         'from contextlib import asynccontextmanager', 'from contextlib import asynccontextmanager\nfrom typing import Literal'),
+        ('body import', '^' + re.escape(BODY_IMPORT) + '$', None, None),
+        ('store initialization', r'^body_hub = BodyHub\(store\)$',
+         'store.init()\n', 'store.init()\nbody_hub = BodyHub(store)\n'),
+        ('reply implementation', r'^async def _reply_stream_impl\(',
+         'async def _reply_stream(user_text=None, note=None, heard=None):', 'async def _reply_stream_impl(user_text=None, note=None, heard=None):'),
+        ('chat source', r'^class ChatIn\(BaseModel\):\n    text: str\n    source: Literal\["web", "body"\] = "web"$',
+         'class ChatIn(BaseModel):\n    text: str', 'class ChatIn(BaseModel):\n    text: str\n    source: Literal["web", "body"] = "web"'),
+        ('chat route', r'_reply_stream\(text, note=note, heard=heard, source=body\.source[,)]',
+         '_reply_stream(text, note=note, heard=heard)', '_reply_stream(text, note=note, heard=heard, source=body.source)'),
+    )
+    for label, installed, old, new in steps:
+        found = _count(server, installed)
+        if found > 1:
+            raise InstallError(f'Duplicate installed anchor: {label}')
+        if found == 1:
+            continue
+        if label == 'body import':
+            # The Companion's own module list varies between versions; it only needs voice.
+            lines = re.findall(r'^from \. import [\w, ]+$', server, re.M)
+            if len(lines) != 1 or not re.search(r'\bvoice\b', lines[0]):
+                raise InstallError(f'Unsupported or ambiguous source anchor: {label}')
+            old, new = lines[0], lines[0] + '\n' + BODY_IMPORT
+        server = _replace(server, old, new, label)
+    wrappers = _count(server, r'^async def _reply_stream\(')
+    routes = server.count(BODY_ROUTES)
+    if wrappers == 0 and routes == 0:
+        server = _replace(server, 'class ChatIn(BaseModel):', REPLY_WRAPPER + 'class ChatIn(BaseModel):', 'serialized reply wrapper')
+    elif wrappers != 1 or routes != 1:
+        raise InstallError('Unsupported or ambiguous source anchor: serialized reply wrapper')
+    # Whatever shape we accepted, the integration must be complete and unique.
+    wrapper = re.search(r'^async def _reply_stream\([^)]*\bsource="web"[^)]*\):\n(?:(?:    .*)?\n)*?'
+                        r'    async for chunk in body_hub\.relay\(_reply_stream_impl, ', server, re.M)
+    if not wrapper or server.index(BODY_ROUTES) < wrapper.start():
+        raise InstallError('Unsupported or ambiguous source anchor: serialized reply wrapper')
+    return server
 
 
 def _build(root, original):
@@ -135,32 +212,7 @@ def _build(root, original):
         if original[name] is None:
             raise InstallError(f'Missing Companion source: {name}')
     texts = {name: original[name].decode('utf-8').replace('\r\n', '\n') for name in SOURCE}
-    server = texts['app/server.py']
-    for old, new, label in (
-        ('from contextlib import asynccontextmanager', 'from contextlib import asynccontextmanager\nfrom typing import Literal', 'typing import'),
-        ('from . import brain, store, voice, weaver', 'from . import brain, store, voice, weaver\nfrom .body_runtime import BodyHub, attach_body_routes', 'body import'),
-        ('store.init()\n', 'store.init()\nbody_hub = BodyHub(store)\n', 'store initialization'),
-        ('async def _reply_stream(user_text=None, note=None, heard=None):', 'async def _reply_stream_impl(user_text=None, note=None, heard=None):', 'reply implementation'),
-        ('class ChatIn(BaseModel):\n    text: str', 'class ChatIn(BaseModel):\n    text: str\n    source: Literal["web", "body"] = "web"', 'chat source'),
-        ('_reply_stream(text, note=note, heard=heard)', '_reply_stream(text, note=note, heard=heard, source=body.source)', 'chat route'),
-    ):
-        # Several insertions contain their old anchor as a prefix.
-        if new not in server:
-            server = _replace(server, old, new, label)
-        elif server.count(new) != 1:
-            raise InstallError(f'Duplicate installed anchor: {label}')
-    wrapper = '''async def _reply_stream(user_text=None, note=None, heard=None, source="web"):
-    async for chunk in body_hub.relay(_reply_stream_impl, user_text=user_text, note=note, heard=heard, source=source):
-        yield chunk
-
-
-attach_body_routes(app, body_hub, _reply_stream, voice=voice)
-
-
-'''
-    if wrapper not in server:
-        server = _replace(server, 'class ChatIn(BaseModel):', wrapper + 'class ChatIn(BaseModel):', 'serialized reply wrapper')
-    texts['app/server.py'] = server
+    texts['app/server.py'] = _server_patch(texts['app/server.py'])
     js = texts['static/app.js']
     for old, new, label in (
         ('async function speak(text, force = false) {', 'async function speak(text, force = false) {\n  if (window.BodyClient?.routesAudio && !force) return;', 'chat audio'),
