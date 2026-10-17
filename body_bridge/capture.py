@@ -34,8 +34,70 @@ class Capture:
         if epoch == self.epoch and capture_id == self.capture_id:
             self.feed_mic(payload)
 
-    async def press(self, now=None):
+    async def press(self, now=None, sensor=1):
         if not self.fresh() or self.blocked_until_release or self.phase == 'recording':
+            return
+        if self.work and not self.work.done():
+            if not self.error:
+                self.error = BUSY_ADVISORY
+            return
+        self.clear_busy_advisory()
+        self.active_sensor = sensor
+        self.play_token += 1
+        if self.play_task:
+            self.play_task.cancel()
+            await asyncio.gather(self.play_task, return_exceptions=True)
+        self.clear_speech()
+        self.capture = bytearray()
+        self.capture_id += 1
+        self.started = time.monotonic() if now is None else now
+        self.peak_strength = self.active_pressure().strength
+        self.phase = 'recording'
+        try:
+            await self.send(self.link.set_mode, 2)
+        except Exception as exc:
+            self.capture.clear()
+            self.phase, self.error = 'idle', str(exc)[:240]
+
+    async def release(self, now=None, capped=False):
+        if self.blocked_until_release and not capped:
+            # 网页停止按钮不能替代真实松手，避免长按上限后再次启动。
+            if not self.active_pressure().pressed:
+                self.blocked_until_release = False
+            return
+        if self.phase != 'recording':
+            return
+        duration = max(0, (time.monotonic() if now is None else now) - self.started)
+        pcm, self.capture = bytes(self.capture), bytearray()
+        self.phase = 'thinking'
+        # 网页录音没有实体松手边沿；只阻止仍然按住的 FSR 重触发。
+        self.blocked_until_release = capped and self.active_pressure().pressed
+        try:
+            await self.send(self.link.set_mode, 0)
+        except Exception as exc:
+            self.phase, self.error = 'disconnected', str(exc)[:240]
+            return
+        epoch = self.epoch
+        touch = {'event_id': uuid.uuid4().hex, 'kind': 'touch',
+                 'duration': round(duration, 3), 'strength': round(self.peak_strength, 4),
+                 'sensor': self.active_sensor}
+        self.work = asyncio.create_task(self._submit(pcm, touch, epoch))
+
+    async def cancel_recording(self):
+        """丢掉正在录的音（例如右手刚按下就变成了抱抱），不送识别。"""
+        if self.phase != 'recording':
+            return
+        self.capture = bytearray()
+        self.capture_id += 1
+        self.phase = 'idle'
+        try:
+            await self.send(self.link.set_mode, 0)
+        except Exception as exc:
+            self.phase, self.error = 'disconnected', str(exc)[:240]
+
+    async def physical(self, kind, duration, strength, sensor=None):
+        """左手触碰或抱抱：不录音，直接告诉同一个小暖；会打断正在播放的回复。"""
+        if not self.fresh():
             return
         if self.work and not self.work.done():
             if not self.error:
@@ -47,39 +109,26 @@ class Capture:
             self.play_task.cancel()
             await asyncio.gather(self.play_task, return_exceptions=True)
         self.clear_speech()
-        self.capture = bytearray()
-        self.capture_id += 1
-        self.started = time.monotonic() if now is None else now
-        self.peak_strength = self.pressure.strength
-        self.phase = 'recording'
-        try:
-            await self.send(self.link.set_mode, 2)
-        except Exception as exc:
-            self.capture.clear()
-            self.phase, self.error = 'idle', str(exc)[:240]
-
-    async def release(self, now=None, capped=False):
-        if self.blocked_until_release and not capped:
-            # 网页停止按钮不能替代真实松手，避免长按上限后再次启动。
-            if not self.pressure.pressed:
-                self.blocked_until_release = False
-            return
-        if self.phase != 'recording':
-            return
-        duration = max(0, (time.monotonic() if now is None else now) - self.started)
-        pcm, self.capture = bytes(self.capture), bytearray()
+        event = {'event_id': uuid.uuid4().hex, 'kind': kind,
+                 'duration': round(min(15.0, max(0.0, duration)), 3),
+                 'strength': round(min(1.0, max(0.0, strength)), 4)}
+        if sensor is not None:
+            event['sensor'] = sensor
         self.phase = 'thinking'
-        # 网页录音没有实体松手边沿；只阻止仍然按住的 FSR 重触发。
-        self.blocked_until_release = capped and self.pressure.pressed
-        try:
-            await self.send(self.link.set_mode, 0)
-        except Exception as exc:
-            self.phase, self.error = 'disconnected', str(exc)[:240]
-            return
         epoch = self.epoch
-        touch = {'event_id': uuid.uuid4().hex, 'kind': 'touch',
-                 'duration': round(duration, 3), 'strength': round(self.peak_strength, 4)}
-        self.work = asyncio.create_task(self._submit(pcm, touch, epoch))
+        self.work = asyncio.create_task(self._submit_physical(event, epoch))
+
+    async def _submit_physical(self, event, epoch):
+        try:
+            await asyncio.wait_for(self.client.touch(event), 95)
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            self.error = str(exc)[:240]
+        finally:
+            if epoch == self.epoch and self.phase == 'thinking':
+                self.phase = 'idle' if self.fresh() else 'disconnected'
+                self.clear_busy_advisory()
 
     async def _submit(self, pcm, touch, epoch):
         try:

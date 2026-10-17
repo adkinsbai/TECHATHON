@@ -148,7 +148,8 @@ def deploy(board, config_path, backup_path, source_dir, baseline, root=ROOT):
     for name in SOURCES:
         actual = before[name]
         # 只对来源批准比较允许 CRLF/LF；备份、部署和读回仍校验原始字节。
-        approved = {digest(data.replace(b'\r\n', b'\n')) for data in (baseline[name], desired[name])}
+        known = baseline[name] if isinstance(baseline[name], (list, tuple)) else [baseline[name]]
+        approved = {digest(data.replace(b'\r\n', b'\n')) for data in (*known, desired[name])}
         normalized = digest(originals[name].replace(b'\r\n', b'\n')) if actual else None
         if actual is None or normalized not in approved:
             safe_hash = actual['sha256'] if actual else 'missing'
@@ -181,13 +182,23 @@ def deploy(board, config_path, backup_path, source_dir, baseline, root=ROOT):
 
 
 def baseline_sources():
+    """批准的来源：基线提交，加上当前分支历史里提交过的每个版本（板子可能停在任一已发布版本）。"""
     result = {}
     for name in SOURCES:
-        response = subprocess.run(['git', 'show', '%s:firmware/board/%s' % (BASELINE, name)],
-                                  cwd=ROOT, capture_output=True, timeout=15)
-        if response.returncode:
-            raise DeployError('无法读取批准的 Git 基线，拒绝写入')
-        result[name] = response.stdout
+        path = 'firmware/board/%s' % name
+        log = subprocess.run(['git', 'log', '--format=%H', 'HEAD', '--', path],
+                             cwd=ROOT, capture_output=True, timeout=15)
+        if log.returncode:
+            raise DeployError('无法读取批准的 Git 历史，拒绝写入')
+        versions = []
+        for commit in [BASELINE] + log.stdout.decode('ascii').split():
+            response = subprocess.run(['git', 'show', '%s:%s' % (commit, path)],
+                                      cwd=ROOT, capture_output=True, timeout=15)
+            if response.returncode == 0:
+                versions.append(response.stdout)
+            elif commit == BASELINE:
+                raise DeployError('无法读取批准的 Git 基线，拒绝写入')
+        result[name] = versions
     return result
 
 

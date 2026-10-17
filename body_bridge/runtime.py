@@ -7,6 +7,9 @@ from .capture import Capture
 from .playback import Playback
 from .pressure import Pressure
 
+RIGHT, LEFT = 1, 2       # 传感器 1（GPIO8）= 右手：按住说话；传感器 2（GPIO9）= 左手：只感知触碰
+HUG_WINDOW = 1.0         # 两只手先后按下相隔不超过这么多秒，算“一起按”= 抱抱
+
 
 class Bridge(Capture, Playback):
     def __init__(self, link, client, volume=10, port=5000, drain_seconds=.4):
@@ -16,6 +19,10 @@ class Bridge(Capture, Playback):
         self.volume, self.port = volume, port
         self.drain_seconds, self.send_timeout = drain_seconds, 6
         self.pressure = Pressure()
+        # 第二个传感器（GPIO9）可选：没接时静置读数不稳，永远不会校准，也就不会触发。
+        self.pressure2 = Pressure(rest_min=2500)
+        self.active_sensor = 1
+        self.gesture = None       # 一次接触过程：从第一只手按下到两只手都松开
         self.phase, self.error = 'disconnected', ''
         self.epoch, self.conn_id = 0, None
         self.was_connected = False
@@ -49,6 +56,9 @@ class Bridge(Capture, Playback):
         self.clear_speech()
         self.turns.clear()
         self.pressure.reset()
+        self.pressure2.reset()
+        self.active_sensor = 1
+        self.gesture = None
         self.last_force = None
         self.blocked_until_release = False
         active = [task for task in (self.work, self.play_task) if task and not task.done()]
@@ -77,16 +87,57 @@ class Bridge(Capture, Playback):
         force = dict(self.link.force)
         if force and force.get('at') != self.last_force and time.time() - force.get('at', 0) <= 2:
             self.last_force = force['at']
-            event = self.pressure.update(force['raw'], now)
-            self.peak_strength = max(self.peak_strength, self.pressure.strength)
+            events = [(1, self.pressure.update(force['raw'], now))]
+            if force.get('raw2') is not None:
+                events.append((2, self.pressure2.update(force['raw2'], now)))
+            self.peak_strength = max(self.peak_strength, self.active_pressure().strength)
+            if self.gesture is not None:
+                self.gesture['peak'] = max(self.gesture['peak'], self.pressure.strength, self.pressure2.strength)
             if self.phase == 'calibrating' and self.pressure.baseline is not None:
                 self.phase = 'idle'
-            if event == 'press':
-                await self.press(now)
-            elif event == 'release':
-                await self.release(now)
+            for sensor, event in events:
+                if event:
+                    await self.on_hand(sensor, event, now)
         if self.phase == 'recording' and now - self.started >= 15:
             await self.release(now, capped=True)
+
+    async def on_hand(self, sensor, event, now):
+        """右手按住说话；左手只感知；两只手 1 秒内先后按下 = 抱抱。"""
+        g = self.gesture
+        if event == 'press':
+            if g is None:
+                self.gesture = g = {'start': now, 'first': sensor, 'hug': False, 'talk': False,
+                                    'done': False, 'peak': max(self.pressure.strength, self.pressure2.strength)}
+                if sensor == RIGHT:
+                    await self.press(now, sensor=RIGHT)
+                    g['talk'] = self.phase == 'recording'
+            elif not g['hug'] and not g['done'] and now - g['start'] <= HUG_WINDOW:
+                g['hug'] = True
+                if g['talk']:
+                    await self.cancel_recording()   # 刚开始的录音作废，这次是抱抱
+                    g['talk'] = False
+            elif sensor == RIGHT and not g['talk'] and not g['hug']:
+                # 一直握着左手，过了一会儿再按右手：开始说话，这次不再单独报告左手触碰。
+                await self.press(now, sensor=RIGHT)
+                g['talk'] = self.phase == 'recording'
+                g['done'] = True
+            return
+        if g is None:
+            return
+        if g['hug']:
+            if not (self.pressure.pressed or self.pressure2.pressed):
+                await self.physical('hug', now - g['start'], g['peak'])
+        elif sensor == RIGHT and g['talk']:
+            await self.release(now)
+            g['talk'], g['done'] = False, True
+        elif sensor == LEFT and g['first'] == LEFT and not g['done']:
+            await self.physical('touch', now - g['start'], g['peak'], sensor=LEFT)
+            g['done'] = True
+        if not (self.pressure.pressed or self.pressure2.pressed):
+            self.gesture = None
+
+    def active_pressure(self):
+        return self.pressure2 if self.active_sensor == 2 else self.pressure
 
     def on_event(self, event, data):
         turn = str(data.get('turn_id', ''))
@@ -114,9 +165,13 @@ class Bridge(Capture, Playback):
         stats = dict(self.link.stats)
         stats['rx_age_seconds'] = round(max(0, time.monotonic() - self.link.last_rx), 2) if self.link.last_rx else None
         stats['calibrated'] = self.pressure.baseline is not None
+        sensors = [{'sensor': 1, 'raw': force.get('raw'), 'pressed': self.pressure.pressed,
+                    'calibrated': self.pressure.baseline is not None, 'reported': 'raw' in force},
+                   {'sensor': 2, 'raw': force.get('raw2'), 'pressed': self.pressure2.pressed,
+                    'calibrated': self.pressure2.baseline is not None, 'reported': 'raw2' in force}]
         return {'connected': self.fresh(), 'phase': self.phase,
                 'raw': force.get('raw'), 'mv': force.get('mv'),
-                'pressed': self.pressure.pressed, 'stats': stats,
+                'pressed': self.pressure.pressed or self.pressure2.pressed, 'sensors': sensors, 'stats': stats,
                 'error': self.error or getattr(self.link, 'bind_error', ''), 'tcp_port': self.port}
 
     async def heartbeat(self):
@@ -131,6 +186,8 @@ class Bridge(Capture, Playback):
                     self.capture.clear()
                     await self.send(self.link.set_mode, 0)
                 self.pressure.reset()
+                self.pressure2.reset()
+                self.gesture = None
                 self.blocked_until_release = False
                 if self.phase not in ('thinking', 'speaking'):
                     self.phase = 'calibrating' if self.fresh() else 'disconnected'

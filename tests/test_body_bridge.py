@@ -23,6 +23,18 @@ class PressureTests(unittest.TestCase):
         self.assertIsNone(sensor.update(4090, .5))
         self.assertEqual(sensor.update(4090, .61), 'release')
 
+    def test_optional_sensor_requires_high_stable_rest(self):
+        sensor = Pressure(calibration_samples=3, debounce=.1, rest_min=2500)
+        for at, raw in [(0, 1000), (.1, 1001), (.2, 999)]:
+            sensor.update(raw, at)
+        self.assertIsNone(sensor.baseline)
+        for at, raw in [(.3, 4095), (.4, 300), (.5, 4000)]:
+            sensor.update(raw, at)
+        self.assertIsNone(sensor.baseline)
+        for at, raw in [(.6, 4095), (.7, 4090), (.8, 4093)]:
+            sensor.update(raw, at)
+        self.assertEqual(sensor.baseline, 4093)
+
     def calibrated(self):
         sensor = Pressure(calibration_samples=3, debounce=.1)
         for at, raw in [(0, 1000), (.1, 1002), (.2, 998)]:
@@ -286,6 +298,100 @@ class RuntimeTests(unittest.IsolatedAsyncioTestCase):
         await self.bridge.wait_work()
         self.assertEqual([c[0] for c in self.client.calls], ['touch'])
         self.assertGreater(self.client.calls[0][1]['strength'], 0)
+
+    async def feed_two(self, values):
+        for index, (at, raw, raw2) in enumerate(values):
+            self.link.force = {'raw': raw, 'mv': 1000, 'raw2': raw2, 'mv2': 1000, 'at': time.time() + index * .00001}
+            await self.bridge.poll(now=at)
+        await self.bridge.wait_work()
+
+    async def test_second_sensor_touch_is_tagged_with_its_sensor_number(self):
+        self.bridge.pressure = Pressure(calibration_samples=3, debounce=.1)
+        self.bridge.pressure2 = Pressure(calibration_samples=3, debounce=.1, rest_min=2500)
+        await self.feed_two([(0, 4095, 4095), (.1, 4095, 4095), (.2, 4095, 4095),
+                             (.3, 4095, 2500), (.41, 4095, 2500), (.5, 4095, 4090), (.61, 4095, 4090)])
+        self.assertEqual([c[0] for c in self.client.calls], ['touch'])
+        self.assertEqual(self.client.calls[0][1]['sensor'], 2)
+        self.assertGreater(self.client.calls[0][1]['strength'], 0)
+
+    async def test_first_sensor_touch_still_reports_sensor_one(self):
+        self.bridge.pressure = Pressure(calibration_samples=3, debounce=.1)
+        self.bridge.pressure2 = Pressure(calibration_samples=3, debounce=.1, rest_min=2500)
+        await self.feed_two([(0, 4095, 4095), (.1, 4095, 4095), (.2, 4095, 4095),
+                             (.3, 2500, 4095), (.41, 2500, 4095), (.5, 4090, 4095), (.61, 4090, 4095)])
+        self.assertEqual(self.client.calls[0][1]['sensor'], 1)
+
+    async def test_unplugged_floating_second_sensor_never_calibrates_or_triggers(self):
+        self.bridge.pressure = Pressure(calibration_samples=3, debounce=.1)
+        self.bridge.pressure2 = Pressure(calibration_samples=3, debounce=.1, rest_min=2500)
+        noise = [1200, 3900, 300, 2600, 50, 4095, 900, 3100, 1800, 200]
+        await self.feed_two([(i * .1, 4095, noise[i % len(noise)]) for i in range(60)])
+        self.assertIsNone(self.bridge.pressure2.baseline)
+        self.assertEqual(self.client.calls, [])
+        self.assertEqual(self.bridge.phase, 'idle')
+        sensors = self.bridge.snapshot()['sensors']
+        self.assertEqual([s['calibrated'] for s in sensors], [True, False])
+
+    def two_hands(self):
+        self.bridge.pressure = Pressure(calibration_samples=3, debounce=.1)
+        self.bridge.pressure2 = Pressure(calibration_samples=3, debounce=.1, rest_min=2500)
+        return [(0, 4095, 4095), (.1, 4095, 4095), (.2, 4095, 4095)]
+
+    async def test_right_then_left_together_is_a_hug_and_drops_the_recording(self):
+        rest = self.two_hands()
+        await self.feed_two(rest + [(.3, 2500, 4095), (.41, 2500, 4095),      # 右手按下：开始录音
+                                    (.6, 2500, 2500), (.71, 2500, 2500),      # 0.3 秒后左手也按下：抱抱
+                                    (2.0, 4095, 4095), (2.11, 4095, 4095)])   # 两只手都松开
+        self.assertEqual([c[0] for c in self.client.calls], ['touch'])
+        hug = self.client.calls[0][1]
+        self.assertEqual(hug['kind'], 'hug')
+        self.assertNotIn('sensor', hug)
+        self.assertAlmostEqual(hug['duration'], 2.11 - .41, places=2)
+        self.assertGreater(hug['strength'], 0)
+        self.assertIn(('mode', 2), self.link.sent)
+        self.assertEqual(self.link.sent[-1], ('mode', 0))
+
+    async def test_left_then_right_together_is_a_hug(self):
+        rest = self.two_hands()
+        await self.feed_two(rest + [(.3, 4095, 2500), (.41, 4095, 2500),
+                                    (.9, 2500, 2500), (1.01, 2500, 2500),
+                                    (1.5, 4095, 4095), (1.61, 4095, 4095)])
+        self.assertEqual([(c[0], c[1]['kind']) for c in self.client.calls], [('touch', 'hug')])
+        self.assertNotIn(('mode', 2), self.link.sent)
+
+    async def test_left_hand_never_records_even_when_held(self):
+        rest = self.two_hands()
+        await self.feed_two(rest + [(.3, 4095, 2500), (.41, 4095, 2500), (3.0, 4095, 4090), (3.11, 4095, 4090)])
+        self.assertEqual(len(self.client.calls), 1)
+        touch = self.client.calls[0][1]
+        self.assertEqual((touch['kind'], touch['sensor']), ('touch', 2))
+        self.assertAlmostEqual(touch['duration'], 3.11 - .41, places=2)
+        self.assertNotIn(('mode', 2), self.link.sent)
+
+    async def test_late_left_touch_does_not_interrupt_talking(self):
+        rest = self.two_hands()
+        await self.feed_two(rest + [(.3, 2500, 4095), (.41, 2500, 4095),
+                                    (2.0, 2500, 2500), (2.11, 2500, 2500), (2.5, 2500, 4090), (2.61, 2500, 4090)])
+        self.assertEqual(self.bridge.phase, 'recording')
+        self.assertEqual(self.client.calls, [])
+
+    async def test_holding_left_then_pressing_right_later_starts_talking(self):
+        rest = self.two_hands()
+        await self.feed_two(rest + [(.3, 4095, 2500), (.41, 4095, 2500), (2.0, 2500, 2500), (2.11, 2500, 2500)])
+        self.assertEqual(self.bridge.phase, 'recording')
+        self.bridge.feed_mic(bytes(4800))
+        await self.feed_two([(3.0, 4095, 2500), (3.11, 4095, 2500), (3.5, 4095, 4095), (3.61, 4095, 4095)])
+        self.assertEqual([c[0] for c in self.client.calls], ['asr', 'chat'])
+
+    async def test_old_single_sensor_frames_still_work(self):
+        self.bridge.pressure = Pressure(calibration_samples=3, debounce=.1)
+        values = [(0, 4095), (.1, 4095), (.2, 4095), (.3, 2500), (.41, 2500), (.5, 4090), (.61, 4090)]
+        for index, (at, raw) in enumerate(values):
+            self.link.force = {'raw': raw, 'mv': 1000, 'at': time.time() + index * .00001}
+            await self.bridge.poll(now=at)
+        await self.bridge.wait_work()
+        self.assertEqual(self.client.calls[0][1]['sensor'], 1)
+        self.assertFalse(self.bridge.snapshot()['sensors'][1]['reported'])
 
     async def test_capture_cap_sends_once_and_waits_for_release(self):
         self.bridge.pressure.pressed = True

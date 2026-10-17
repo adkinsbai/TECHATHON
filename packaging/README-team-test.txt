@@ -3,6 +3,9 @@
 
 这台电脑不需要装 Python，也不需要敲命令。
 
+最新版本随时在这里下载（不用 U 盘拷）：
+https://github.com/tjusaltedfish/TECHATHON/releases/tag/team-test-latest
+
 第一次使用
 1. 把整个压缩包解压到一个短路径，例如 D:\Xiaonuan（不要直接在压缩包里双击运行）。
 2. 打开 Windows 设置 → 网络和 Internet → 移动热点：

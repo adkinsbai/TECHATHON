@@ -9,7 +9,7 @@
   panel.className = "body-panel";
   panel.innerHTML = `<summary><span class="body-dot"></span><span>实体小暖</span><span class="body-pill">未连接</span><span class="body-chevron">⌄</span></summary>
     <div class="body-inner"><div class="body-phase" role="status" aria-live="polite">等待实体连接</div>
-    <p class="body-guide">按住说话，松开后回答。轻轻短按一下，小暖也能感觉到。</p>
+    <p class="body-guide">按住右手说话，松开后回答。摸摸左手，或两只手一起握住抱抱，小暖都能感觉到。</p>
     <div class="body-pressure"><span>触碰</span><progress max="4095" value="0" aria-label="传感器按压力度"></progress><span class="body-pressure-text">等待数据</span></div>
     <label class="body-volume">扬声器音量 <output>10%</output><input aria-label="实体扬声器音量" type="range" min="0" max="100" step="1" value="10"></label>
     <div class="body-buttons"><button type="button" class="body-record" disabled>开始录音</button><button type="button" class="body-calibrate" disabled>松手校准</button></div>
@@ -36,9 +36,16 @@
     find(".body-record").disabled = !online || state.phase === "thinking";
     find(".body-record").textContent = recording ? "结束并发送" : "开始录音";
     find(".body-calibrate").disabled = !online || recording;
-    const raw = Number.isFinite(state.raw) ? state.raw : null;
+    // 两个压力传感器：进度条显示按得最重的那个，文字显示哪只手被按住；两只手都按住就是抱抱。
+    const sites = state.settings?.sites || ["右手", "左手"];
+    const sensors = Array.isArray(state.sensors) && state.sensors.length ? state.sensors
+      : [{ sensor: 1, raw: state.raw, pressed: state.pressed, calibrated: true }];
+    const live = sensors.filter((s) => s.calibrated && Number.isFinite(s.raw));
+    const raw = live.length ? Math.min(...live.map((s) => s.raw)) : (Number.isFinite(state.raw) ? state.raw : null);
+    const held = sensors.find((s) => s.pressed), hugging = sensors.filter((s) => s.pressed).length >= 2;
     find("progress").value = online && raw !== null ? Math.max(0, 4095 - raw) : 0;
-    find(".body-pressure-text").textContent = online && raw !== null ? (state.pressed ? "按住中" : "已松开") : "等待数据";
+    find(".body-pressure-text").textContent = online && raw !== null
+      ? (hugging ? "抱抱中" : held ? `${sites[held.sensor - 1] || "传感器"}按住中` : `已松开 · ${live.length || 1} 个传感器`) : "等待数据";
     if (document.activeElement !== slider) slider.value = state.settings?.volume ?? 10;
     output.value = `${slider.value}%`;
     renderError();

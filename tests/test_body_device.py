@@ -73,6 +73,14 @@ class DeviceDeploymentTests(unittest.TestCase):
         self.assertEqual((self.backup / 'main.py').read_bytes(), b'known\r\nsource\r\n')
         self.assertEqual(self.board.files['main.py'], self.baseline['main.py'])
 
+    def test_any_committed_historical_version_is_approved(self):
+        self.baseline['main.py'] = [b'older\n', b'released\n']
+        self.files['main.py'] = self.board.files['main.py'] = b'released\n'
+        (self.source / 'main.py').write_bytes(b'new release\n')
+        result = self.deploy()
+        self.assertIn('main.py', result['written'])
+        self.assertEqual(self.board.files['main.py'], b'new release\n')
+
     def test_whitespace_change_is_not_an_approved_line_ending_variant(self):
         self.baseline['main.py'] = b'known\nsource\n'
         (self.source / 'main.py').write_bytes(self.baseline['main.py'])

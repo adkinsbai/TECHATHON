@@ -36,9 +36,12 @@ def main():
     from app import server, brain, voice
     import uvicorn
 
-    state = {"asr_count": 0, "tts_count": 0, "last_audio": None}
+    state = {"asr_count": 0, "tts_count": 0, "last_audio": None, "last_task": ""}
 
     async def fake_chat(messages, **kwargs):
+        # 只保存系统提示里“当前任务”这一段，用来核对实体触碰的说明（不含聊天内容）。
+        system = messages[0]["content"] if messages else ""
+        state["last_task"] = system.split("## 当前任务", 1)[1][:400] if "## 当前任务" in system else ""
         for part in ("[happy 0.7]\n", "收到，实体里的小暖听见了。"):
             await asyncio.sleep(.02)
             yield part
