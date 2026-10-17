@@ -34,7 +34,7 @@
 
 ## 团队测试版（Xiaonuan.exe，免装 Python）
 
-测试电脑只需解压 `Xiaonuan-team-test.zip`，打开 Windows 移动热点（2.4GHz），双击 `Xiaonuan.exe`，在自动打开的 `http://127.0.0.1:8765/setup` 页填 DeepSeek 密钥、一键放行防火墙，等板子变绿即可。压缩包内置 Python 3.12、依赖和 SenseVoice 识别模型；聊天数据和密钥保存在 `%APPDATA%\Xiaonuan`，不在程序目录里。详细步骤见 [packaging/README-team-test.txt](packaging/README-team-test.txt)。
+最新的压缩包始终在 GitHub Release [team-test-latest](https://github.com/tjusaltedfish/TECHATHON/releases/tag/team-test-latest)（约 200MB，超过 Git 单文件上限，所以不提交进仓库）。测试电脑只需下载解压 `Xiaonuan-team-test.zip`，打开 Windows 移动热点（2.4GHz），双击 `Xiaonuan.exe`，在自动打开的 `http://127.0.0.1:8765/setup` 页填 DeepSeek 密钥、一键放行防火墙，等板子变绿即可。压缩包内置 Python 3.12、依赖和 SenseVoice 识别模型；聊天数据和密钥保存在 `%APPDATA%\Xiaonuan`，不在程序目录里。详细步骤见 [packaging/README-team-test.txt](packaging/README-team-test.txt)。
 
 板子用 USB 烧录时把 `firmware/wifi.json` 的 `host` 设为 `192.168.137.1`（Windows 移动热点里电脑的固定地址），`ssid`/`password` 填测试电脑的热点。
 
@@ -42,8 +42,10 @@
 
 ```powershell
 cd companion; python -m voice_pack.download --models-dir D:\xiaonuan-models; cd ..
-.\packaging\build_app.ps1 -ModelsDir D:\xiaonuan-models -OutDir D:\xiaonuan-build
+.\packaging\build_app.ps1 -ModelsDir D:\xiaonuan-models -OutDir D:\xiaonuan-build -Publish
 ```
+
+`-Publish` 会把 zip 上传到 `team-test-latest`（覆盖旧附件），说明里记录构建所用的分支、提交和 SHA256。
 
 源码运行同一个入口：`python -m xiaonuan_app`。
 
