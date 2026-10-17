@@ -187,6 +187,86 @@ class InstallerTests(unittest.TestCase):
             self.assertEqual((self.root / name).read_text(encoding='utf-8'), value)
         self.assertFalse((self.root / 'app/body_runtime.py').exists())
 
+    def test_original_with_extra_module_imports_is_patched(self):
+        module = self.module()
+        server = self.root / 'app/server.py'
+        server.write_text(self.original['app/server.py'].replace(
+            'from . import brain, store, voice, weaver', 'from . import brain, speech_stream, store, voice, weaver'), encoding='utf-8')
+        module.install(self.root)
+        text = server.read_text(encoding='utf-8')
+        self.assertIn('from . import brain, speech_stream, store, voice, weaver\nfrom .body_runtime import BodyHub, attach_body_routes', text)
+        self.assertEqual(text.count('async def _reply_stream('), 1)
+        self.assertEqual(module.install(self.root)['changed'], [])
+
+    def pr2_shape(self):
+        """Turn an installed fixture into the PR #2 (voice pack) integrated shape."""
+        module = self.module()
+        module.install(self.root)
+        server = self.root / 'app/server.py'
+        text = server.read_text(encoding='utf-8')
+        text = text.replace('from . import brain, store, voice, weaver', 'from . import brain, speech_stream, store, voice, weaver')
+        text = text.replace('''async def _reply_stream(user_text=None, note=None, heard=None, source="web"):
+    async for chunk''', '''async def _reply_stream(user_text=None, note=None, heard=None, source="web", tts=False):
+    sp = speech_stream.Speaker(None) if tts else None
+    async for chunk''')
+        text = text.replace('source=body.source)', 'source=body.source, tts=body.tts)')
+        text = text.replace('    source: Literal["web", "body"] = "web"\n', '    source: Literal["web", "body"] = "web"\n    tts: bool = False\n')
+        server.write_text(text, encoding='utf-8', newline='\n')
+        chat = self.root / 'static/app.js'
+        text = chat.read_text(encoding='utf-8')
+        text = text.replace('  bodySpeechForced = false;\n', '  bodySpeechForced = false;\n  audioQueue.length = 0;\n  queuePlaying = false;\n', 1)
+        text = text.replace('''      if (speechCancelled()) return;
+      console.warn("GLM TTS 不可用，改用浏览器语音：", e.message);
+      ttsMode = "browser";''', '''      if (!speechCancelled()) console.warn("这句语音没合成出来（不换声音）：", e.message);
+      return;''')
+        chat.write_text(text, encoding='utf-8', newline='\n')
+        world = self.root / 'static/world.js'
+        text = world.read_text(encoding='utf-8')
+        text = text.replace('  bodyWorldSpeechGeneration += 1;\n', '  bodyWorldSpeechGeneration += 1;\n  worldAudioQ.length = 0;\n  worldQPlaying = false;\n', 1)
+        text = text.replace('''    if (speechCancelled() || !window.speechSynthesis) return;
+    const u = new SpeechSynthesisUtterance(text);
+    u.lang = "zh-CN"; u.pitch = 1.15;
+    speechSynthesis.speak(u);''', '    Cat.talking = false;')
+        world.write_text(text, encoding='utf-8', newline='\n')
+        self.assertNotIn('console.warn("GLM TTS', chat.read_text(encoding='utf-8'))
+        self.assertNotIn('SpeechSynthesisUtterance', world.read_text(encoding='utf-8'))
+        return module
+
+    def test_pr2_integrated_server_is_recognised_as_installed(self):
+        module = self.pr2_shape()
+        before = {name: (self.root / name).read_bytes() for name in module.SOURCE}
+        result = module.install(self.root)
+        self.assertEqual(result['changed'], [])
+        self.assertEqual(before, {name: (self.root / name).read_bytes() for name in module.SOURCE})
+        server = (self.root / 'app/server.py').read_text(encoding='utf-8')
+        for definition in ('async def _reply_stream(', 'async def _reply_stream_impl(',
+                           'attach_body_routes(app, body_hub', 'body_hub = BodyHub(store)', 'from typing import Literal'):
+            self.assertEqual(server.count(definition), 1, definition)
+        for name, marker in (('static/app.js', 'let bodySpeechGeneration'), ('static/world.js', 'let bodyWorldSpeechGeneration')):
+            self.assertEqual((self.root / name).read_text(encoding='utf-8').count(marker), 1, name)
+
+    def test_bundled_companion_snapshot_is_already_installed(self):
+        module = self.module()
+        source = ROOT / 'companion'
+        desired = module.build_changes(source)
+        for name in module.SOURCE:
+            self.assertEqual(desired[name], (source / name).read_bytes(), name)
+
+    def test_partial_or_duplicate_integration_is_refused(self):
+        module = self.module()
+        module.install(self.root)
+        server = self.root / 'app/server.py'
+        installed = server.read_text(encoding='utf-8')
+        broken = (installed.replace('attach_body_routes(app, body_hub, _reply_stream, voice=voice)\n', ''),
+                  installed.replace('class ChatIn', 'async def _reply_stream(user_text=None):\n    yield ""\nclass ChatIn'),
+                  installed.replace('body_hub = BodyHub(store)\n', 'body_hub = BodyHub(store)\nbody_hub = BodyHub(store)\n'))
+        for text in broken:
+            server.write_text(text, encoding='utf-8')
+            before = {p: p.read_bytes() for p in self.root.rglob('*') if p.is_file()}
+            with self.assertRaises(module.InstallError):
+                module.install(self.root)
+            self.assertEqual(before, {p: p.read_bytes() for p in self.root.rglob('*') if p.is_file()})
+
     def test_concurrent_change_is_not_overwritten(self):
         module = self.module()
         real = module._atomic_write

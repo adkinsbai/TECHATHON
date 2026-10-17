@@ -14,7 +14,10 @@ def prepare(source, root):
     from install_companion import _filesystem_path, install
     source, root = _filesystem_path(source), _filesystem_path(root)
     root.mkdir(parents=True, exist_ok=True)
-    for folder in ("app", "static"):
+    # voice_pack is source-only (models stay outside it) and only exists in newer Companions.
+    for folder in ("app", "static", "voice_pack"):
+        if folder == "voice_pack" and not (source / folder).is_dir():
+            continue
         shutil.copytree(source / folder, root / folder, dirs_exist_ok=True,
                         ignore=shutil.ignore_patterns("__pycache__", "*.pyc", ".env*", "interaction-log.json"))
     return install(root)
