@@ -328,16 +328,28 @@ class RuntimeTests(unittest.IsolatedAsyncioTestCase):
         self.assertGreaterEqual(default.drain_seconds, .4)
 
     async def test_send_failure_is_bounded_and_does_not_stay_speaking(self):
+        import threading
+        release_sender = threading.Event()
+        finished = threading.Event()
+        attempts = []
         def stuck(pcm):
-            time.sleep(.1)
-            return True
+            attempts.append(len(pcm))
+            try:
+                release_sender.wait()
+                return True
+            finally:
+                finished.set()
         self.link.send_audio = stuck
-        self.bridge.send_timeout = .01
-        started = time.monotonic()
-        await self.bridge.play('hello', self.bridge.epoch)
-        self.assertLess(time.monotonic() - started, .08)
-        self.assertNotEqual(self.bridge.phase, 'speaking')
-        self.assertTrue(self.bridge.error)
+        self.bridge.send_timeout = .5
+        try:
+            # 完成必须依赖发送超时；工作线程在断言结束前始终保持阻塞。
+            await asyncio.wait_for(self.bridge.play('hello', self.bridge.epoch), timeout=5)
+            self.assertEqual(attempts, [4096])  # 部分发送超时不重试音频帧。
+            self.assertEqual(self.bridge.phase, 'idle')
+            self.assertEqual(self.bridge.error, '板子发送超时')
+        finally:
+            release_sender.set()
+            await asyncio.to_thread(finished.wait, 1)
 
     async def test_press_waits_for_inflight_audio_before_switching_to_recording(self):
         import threading
