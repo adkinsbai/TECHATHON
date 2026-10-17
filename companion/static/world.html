@@ -22,14 +22,17 @@
     <p id="startSub">噜噜在湖边的小木屋里等你</p>
     <div class="chapters" id="chapters"></div>
     <button class="btn" id="enterBtn" disabled>正在生成星球…</button>
+    <button class="btn ghost" id="externalPlay" type="button" style="margin-top:10px">在独立浏览器游玩 ↗</button>
+    <p id="externalMessage" style="font-size:12px;margin-top:10px">在 Codex 预览里可用屏幕按钮；WASD 游玩请选择独立浏览器。</p>
     <ul class="keys">
       <li><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> 行走</li>
-      <li><kbd>鼠标</kbd> 看四周（进入后自动全屏、锁定鼠标）</li>
+      <li><kbd>鼠标</kbd> 看四周 · 内嵌窗口按住画面拖动</li>
       <li><kbd>Shift</kbd> 奔跑 · <kbd>空格</kbd> 跳</li>
       <li><kbd>E</kbd> 和噜噜说话 · <kbd>F</kbd> 跟噜噜出门（第二章）</li>
       <li><kbd>Esc</kbd> 暂停</li>
     </ul>
     <a class="back" href="/">← 回到聊天</a>
+    <a class="back" href="/world-studio">把对话变成新世界 →</a>
   </div>
 </div>
 
@@ -41,6 +44,17 @@
   <div class="bubble" id="bubble" hidden></div>
   <div class="caption" id="caption" hidden></div>
   <div class="quest" id="quest" hidden></div>
+    <nav id="walk-controls" class="walk-controls" aria-label="屏幕移动控制" hidden>
+      <div id="walk-status">WASD 行走 · 拖动画面转头</div>
+      <div class="walk-pad">
+        <button type="button" data-move="KeyW" aria-label="向前走">前进 ↑</button>
+        <button type="button" data-move="KeyA" aria-label="向左移动">← 左移</button>
+        <button type="button" data-move="KeyS" aria-label="向后退">后退 ↓</button>
+        <button type="button" data-move="KeyD" aria-label="向右移动">右移 →</button>
+      </div>
+      <div class="walk-turn"><button type="button" data-move="ArrowLeft" aria-label="向左转头">↶ 左转</button><button type="button" data-move="Space" aria-label="跳跃">跳跃</button><button type="button" data-move="ArrowRight" aria-label="向右转头">右转 ↷</button></div>
+      <small>按住连续移动，轻点走一步</small>
+    </nav>
   <div class="space-hint" id="spaceHint" hidden>
     <span>拖动 / 方向键 环顾 · <kbd>V</kbd> 切换舱内/舱外 · <kbd>E</kbd> 和噜噜说话</span>
     <button class="btn small" id="homeBtn">🏠 回家（H）</button>

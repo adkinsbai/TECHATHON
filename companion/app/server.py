@@ -548,6 +548,9 @@ async def world():
     return FileResponse(STATIC / "world.html")
 
 
+from .scene_routes import attach_scene_routes
+attach_scene_routes(app)
+
 app.mount("/static", StaticFiles(directory=STATIC), name="static")
 
 

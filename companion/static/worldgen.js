@@ -7,6 +7,14 @@ const C = (hex) => new THREE.Color(hex);
 
 // ---------- 读取当前章节的配方 ----------
 export async function loadRecipe() {
+  const sceneId = new URLSearchParams(location.search).get('scene');
+  if (sceneId) {
+    const response = await fetch(`/api/scene-studio/${encodeURIComponent(sceneId)}`);
+    if (!response.ok) throw new Error('场景不存在，请返回世界工作室。');
+    const job = await response.json();
+    if (!job.plan) throw new Error('场景还在规划中，请稍后再进入。');
+    return {chapterId: 'scene-' + sceneId, recipe: job.recipe, scene: job, worldId: null};
+  }
   let id = new URLSearchParams(location.search).get("chapter");
   try { id = id || localStorage.getItem("chapter"); } catch {}
   id = id || "cabin";

@@ -95,13 +95,20 @@ def _listener_pid(port):
 
 def _stop_old_instance():
     """先请旧版自己退出；旧版没有这个接口时，只结束确认是 Xiaonuan.exe 的那个进程。"""
+    old_pid = _listener_pid(APP_PORT)
+    owns_body = old_pid is not None and _listener_pid(BODY_PORT) == old_pid
+
+    def stopped():
+        # HTTP closes before SSE cleanup and the TCP bridge finish exiting.
+        return not _port_in_use(APP_PORT) and (not owns_body or not _port_in_use(BODY_PORT))
+
     try:
         httpx.post(f"http://127.0.0.1:{APP_PORT}/api/setup/shutdown", headers={"X-Xiaonuan": "takeover"},
                    timeout=3, trust_env=False)
     except httpx.HTTPError:
         pass
     for _ in range(40):
-        if not _port_in_use(APP_PORT):
+        if stopped():
             return
         time.sleep(0.25)
     pid = _listener_pid(APP_PORT)
@@ -112,7 +119,7 @@ def _stop_old_instance():
             subprocess.run(["taskkill", "/PID", str(pid), "/F"], capture_output=True, timeout=10,
                            creationflags=NO_WINDOW)
             for _ in range(40):
-                if not _port_in_use(APP_PORT):
+                if stopped():
                     return
                 time.sleep(0.25)
     raise SystemExit("旧版小暖还开着，没能自动关掉。请先关掉旧的黑色窗口，再重新打开 Xiaonuan.exe。")
@@ -132,7 +139,10 @@ async def _serve(home):
     link = Link(port=BODY_PORT)
     client = CompanionClient(url)
     bridge = Bridge(link, client, VOLUME, BODY_PORT)
-    server = uvicorn.Server(uvicorn.Config(app, host="127.0.0.1", port=APP_PORT, log_level="warning"))
+    # Both the bridge and open pages hold SSE connections to this server.
+    # Bound graceful shutdown so takeover cannot wait forever on those streams.
+    server = uvicorn.Server(uvicorn.Config(app, host="127.0.0.1", port=APP_PORT, log_level="warning",
+                                         timeout_graceful_shutdown=3))
 
     def request_shutdown():
         print("新版小暖要接手，这个窗口里的旧版正在退出。", flush=True)

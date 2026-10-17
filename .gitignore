@@ -1,4 +1,5 @@
 __pycache__/
+.venv/
 *.pyc
 *.log
 
@@ -18,6 +19,7 @@ llm/
 
 # Body integration local paths, source backups and service logs
 .local-body.json
+.scene-local.json
 .body-runtime/
 runtime/
 .body-backups/
