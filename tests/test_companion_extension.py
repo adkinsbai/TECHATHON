@@ -200,6 +200,39 @@ class BodyHttpTests(unittest.IsolatedAsyncioTestCase):
         result = await self.client.patch("/api/body/settings", json={"volume": 10})
         self.assertEqual(result.status_code, 200)
 
+    async def test_sensor_sites_default_validate_and_save(self):
+        result = (await self.client.get("/api/body/status")).json()
+        self.assertEqual(result["settings"]["sites"], ["部位1", "部位2"])
+        for bad in [{}, {"sites": ["头"]}, {"sites": ["", "手"]}, {"sites": ["头", "x" * 13]}]:
+            self.assertEqual((await self.client.patch("/api/body/settings", json=bad)).status_code, 422)
+        result = await self.client.patch("/api/body/settings", json={"sites": [" 头顶 ", "手"]})
+        self.assertEqual(result.status_code, 200)
+        self.assertEqual(result.json()["settings"], {"volume": 10, "sites": ["头顶", "手"]})
+        result = await self.client.patch("/api/body/settings", json={"volume": 30})
+        self.assertEqual(result.json()["settings"], {"volume": 30, "sites": ["头顶", "手"]})
+
+    async def test_touch_note_names_the_sensor_site(self):
+        notes = []
+
+        async def reply(user_text=None, note=None, heard=None, source="web"):
+            notes.append(note)
+            yield sse("done", {"text": "ok", "emotion": "happy"})
+
+        app = FastAPI()
+        attach_body_routes(app, self.hub, reply, voice=self.voice)
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://127.0.0.1") as client:
+            await client.patch("/api/body/settings", json={"sites": ["头顶", "手"]})
+            r = await client.post("/api/body/event", json={"event_id": "s2", "kind": "touch", "duration": .1,
+                                                            "strength": .4, "sensor": 2})
+            self.assertEqual(r.status_code, 200)
+            self.assertIn("「手」", notes[0])
+            r = await client.post("/api/body/event", json={"event_id": "s1", "kind": "touch", "duration": .1,
+                                                            "strength": .4})
+            self.assertIn("「头顶」", notes[1])
+            self.assertEqual((await client.post("/api/body/event", json={"event_id": "s3", "kind": "touch",
+                              "duration": .1, "strength": .4, "sensor": 3})).status_code, 422)
+        self.assertIn("「手」", self.hub.physical_context())
+
     async def test_heartbeat_delivers_commands_once(self):
         self.assertEqual((await self.client.post("/api/body/command", json={"command": "record_start"})).status_code, 409)
         await self.client.post("/api/body/status", json={"connected": True, "phase": "idle"})

@@ -23,6 +23,18 @@ class PressureTests(unittest.TestCase):
         self.assertIsNone(sensor.update(4090, .5))
         self.assertEqual(sensor.update(4090, .61), 'release')
 
+    def test_optional_sensor_requires_high_stable_rest(self):
+        sensor = Pressure(calibration_samples=3, debounce=.1, rest_min=2500)
+        for at, raw in [(0, 1000), (.1, 1001), (.2, 999)]:
+            sensor.update(raw, at)
+        self.assertIsNone(sensor.baseline)
+        for at, raw in [(.3, 4095), (.4, 300), (.5, 4000)]:
+            sensor.update(raw, at)
+        self.assertIsNone(sensor.baseline)
+        for at, raw in [(.6, 4095), (.7, 4090), (.8, 4093)]:
+            sensor.update(raw, at)
+        self.assertEqual(sensor.baseline, 4093)
+
     def calibrated(self):
         sensor = Pressure(calibration_samples=3, debounce=.1)
         for at, raw in [(0, 1000), (.1, 1002), (.2, 998)]:
@@ -286,6 +298,60 @@ class RuntimeTests(unittest.IsolatedAsyncioTestCase):
         await self.bridge.wait_work()
         self.assertEqual([c[0] for c in self.client.calls], ['touch'])
         self.assertGreater(self.client.calls[0][1]['strength'], 0)
+
+    async def feed_two(self, values):
+        for index, (at, raw, raw2) in enumerate(values):
+            self.link.force = {'raw': raw, 'mv': 1000, 'raw2': raw2, 'mv2': 1000, 'at': time.time() + index * .00001}
+            await self.bridge.poll(now=at)
+        await self.bridge.wait_work()
+
+    async def test_second_sensor_touch_is_tagged_with_its_sensor_number(self):
+        self.bridge.pressure = Pressure(calibration_samples=3, debounce=.1)
+        self.bridge.pressure2 = Pressure(calibration_samples=3, debounce=.1, rest_min=2500)
+        await self.feed_two([(0, 4095, 4095), (.1, 4095, 4095), (.2, 4095, 4095),
+                             (.3, 4095, 2500), (.41, 4095, 2500), (.5, 4095, 4090), (.61, 4095, 4090)])
+        self.assertEqual([c[0] for c in self.client.calls], ['touch'])
+        self.assertEqual(self.client.calls[0][1]['sensor'], 2)
+        self.assertGreater(self.client.calls[0][1]['strength'], 0)
+
+    async def test_first_sensor_touch_still_reports_sensor_one(self):
+        self.bridge.pressure = Pressure(calibration_samples=3, debounce=.1)
+        self.bridge.pressure2 = Pressure(calibration_samples=3, debounce=.1, rest_min=2500)
+        await self.feed_two([(0, 4095, 4095), (.1, 4095, 4095), (.2, 4095, 4095),
+                             (.3, 2500, 4095), (.41, 2500, 4095), (.5, 4090, 4095), (.61, 4090, 4095)])
+        self.assertEqual(self.client.calls[0][1]['sensor'], 1)
+
+    async def test_unplugged_floating_second_sensor_never_calibrates_or_triggers(self):
+        self.bridge.pressure = Pressure(calibration_samples=3, debounce=.1)
+        self.bridge.pressure2 = Pressure(calibration_samples=3, debounce=.1, rest_min=2500)
+        noise = [1200, 3900, 300, 2600, 50, 4095, 900, 3100, 1800, 200]
+        await self.feed_two([(i * .1, 4095, noise[i % len(noise)]) for i in range(60)])
+        self.assertIsNone(self.bridge.pressure2.baseline)
+        self.assertEqual(self.client.calls, [])
+        self.assertEqual(self.bridge.phase, 'idle')
+        sensors = self.bridge.snapshot()['sensors']
+        self.assertEqual([s['calibrated'] for s in sensors], [True, False])
+
+    async def test_other_sensor_release_does_not_end_recording(self):
+        self.bridge.pressure = Pressure(calibration_samples=3, debounce=.1)
+        self.bridge.pressure2 = Pressure(calibration_samples=3, debounce=.1, rest_min=2500)
+        # 按住传感器 1 开始录音；传感器 2 短按后松开，不能结束传感器 1 的录音。
+        await self.feed_two([(0, 4095, 4095), (.1, 4095, 4095), (.2, 4095, 4095),
+                             (.3, 2500, 4095), (.41, 2500, 4095),
+                             (.5, 2500, 2500), (.61, 2500, 2500), (.7, 2500, 4090), (.81, 2500, 4090)])
+        self.assertEqual(self.bridge.phase, 'recording')
+        self.assertEqual(self.bridge.active_sensor, 1)
+        self.assertEqual(self.client.calls, [])
+
+    async def test_old_single_sensor_frames_still_work(self):
+        self.bridge.pressure = Pressure(calibration_samples=3, debounce=.1)
+        values = [(0, 4095), (.1, 4095), (.2, 4095), (.3, 2500), (.41, 2500), (.5, 4090), (.61, 4090)]
+        for index, (at, raw) in enumerate(values):
+            self.link.force = {'raw': raw, 'mv': 1000, 'at': time.time() + index * .00001}
+            await self.bridge.poll(now=at)
+        await self.bridge.wait_work()
+        self.assertEqual(self.client.calls[0][1]['sensor'], 1)
+        self.assertFalse(self.bridge.snapshot()['sensors'][1]['reported'])
 
     async def test_capture_cap_sends_once_and_waits_for_release(self):
         self.bridge.pressure.pressed = True

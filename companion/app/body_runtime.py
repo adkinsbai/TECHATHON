@@ -9,7 +9,10 @@ import uuid
 
 from fastapi import File, HTTPException, Request, UploadFile
 from fastapi.responses import Response, StreamingResponse
-from pydantic import BaseModel, ConfigDict, Field, StrictBool
+from pydantic import BaseModel, ConfigDict, Field, StrictBool, StringConstraints
+
+# 两个压力传感器装在身体的哪里；可在设置里改名（例如“头顶”“手”）。
+DEFAULT_SITES = ("部位1", "部位2")
 
 
 def sse(name, data, event_id=None):
@@ -34,16 +37,33 @@ class BodyHub:
 
     def settings(self):
         saved = self.store.get_state("body_settings", {})
-        volume = saved.get("volume", 10) if isinstance(saved, dict) else 10
+        saved = saved if isinstance(saved, dict) else {}
+        volume = saved.get("volume", 10)
         if type(volume) is not int or not 0 <= volume <= 100:
             volume = 10
-        return {"volume": volume}
+        sites = saved.get("sites")
+        if not (isinstance(sites, list) and len(sites) == len(DEFAULT_SITES)
+                and all(isinstance(s, str) and s.strip() for s in sites)):
+            sites = list(DEFAULT_SITES)
+        return {"volume": volume, "sites": sites}
 
     async def set_volume(self, volume):
-        if type(volume) is not int or not 0 <= volume <= 100:
-            raise ValueError("volume must be an integer from 0 to 100")
-        self.store.set_state("body_settings", {"volume": volume})
+        await self.update_settings(volume=volume)
+
+    async def update_settings(self, volume=None, sites=None):
+        current = self.settings()
+        if volume is not None:
+            if type(volume) is not int or not 0 <= volume <= 100:
+                raise ValueError("volume must be an integer from 0 to 100")
+            current["volume"] = volume
+        if sites is not None:
+            current["sites"] = [s.strip() for s in sites]
+        self.store.set_state("body_settings", current)
         await self.publish("status", self.snapshot())
+
+    def site_name(self, sensor):
+        sites = self.settings()["sites"]
+        return sites[sensor - 1] if isinstance(sensor, int) and 1 <= sensor <= len(sites) else sites[0]
 
     def snapshot(self):
         fresh = self._last_seen is not None and self.clock() - self._last_seen <= 8
@@ -116,7 +136,7 @@ class BodyHub:
                   if self.clock() - e.get("ts", 0) < 86400][-5:]
         if not events:
             return ""
-        lines = [f"{dt.datetime.fromtimestamp(e['ts']):%H:%M} 实体压力传感器检测到一次短按压（{e['duration']:.2f}秒）"
+        lines = [f"{dt.datetime.fromtimestamp(e['ts']):%H:%M} 「{self.site_name(e.get('sensor', 1))}」的压力传感器检测到一次短按压（{e['duration']:.2f}秒）"
                  for e in events]
         return "真实身体记录（只代表局部按压）：" + "；".join(lines)
 
@@ -166,10 +186,15 @@ class DeviceStatus(Input):
     stats: dict = Field(default_factory=dict)
     error: str = Field(default="", max_length=500)
     tcp_port: int = Field(default=5000, ge=1, le=65535)
+    sensors: list[dict] = Field(default_factory=list, max_length=4)
+
+
+SiteName = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=12)]
 
 
 class Settings(Input):
-    volume: Annotated[int, Field(strict=True, ge=0, le=100)]
+    volume: Annotated[int, Field(strict=True, ge=0, le=100)] | None = None
+    sites: list[SiteName] | None = Field(default=None, min_length=2, max_length=2)
 
 
 class Command(Input):
@@ -181,6 +206,7 @@ class PhysicalEvent(Input):
     kind: Literal["touch"]
     duration: float = Field(ge=0, le=15, allow_inf_nan=False)
     strength: float = Field(ge=0, le=1, allow_inf_nan=False)
+    sensor: Annotated[int, Field(strict=True, ge=1, le=2)] = 1   # 1 = GPIO8，2 = GPIO9
 
 
 class LocalSpeech(Input):
@@ -228,7 +254,9 @@ def attach_body_routes(app, hub, reply_stream, voice=None):
 
     @app.patch("/api/body/settings")
     async def settings(body: Settings):
-        await hub.set_volume(body.volume)
+        if body.volume is None and body.sites is None:
+            raise HTTPException(422, "没有要修改的设置")
+        await hub.update_settings(volume=body.volume, sites=body.sites)
         return hub.snapshot()
 
     @app.post("/api/body/command")
@@ -240,7 +268,7 @@ def attach_body_routes(app, hub, reply_stream, voice=None):
     async def physical_event(body: PhysicalEvent):
         if not await hub.remember_event(body.model_dump()):
             return Response(status_code=204)
-        note = (f"你的实体身体的压力传感器刚检测到一次持续 {body.duration:.2f} 秒的短按压。"
+        note = (f"你的实体身体「{hub.site_name(body.sensor)}」位置的压力传感器刚检测到一次持续 {body.duration:.2f} 秒的短按压。"
                 "你只知道有局部接触，无法由此知道对方的情绪或位置。自然、简短地回应这次触碰，只说一两句。")
         return StreamingResponse(reply_stream(note=note, source="body"), media_type="text/event-stream")
 

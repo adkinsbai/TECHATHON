@@ -180,11 +180,15 @@ class Link:
                 elif mtype == T_LOG:
                     self.log("板子：%s" % payload.decode("utf-8", "replace"))
                 elif mtype == T_SENS and len(payload) >= 4:
-                    self.force = {
+                    force = {
                         "raw": payload[0] | (payload[1] << 8),
                         "mv": payload[2] | (payload[3] << 8),
                         "at": time.time(),
                     }
+                    if len(payload) >= 8:   # 第二个力传感器（GPIO9）
+                        force["raw2"] = payload[4] | (payload[5] << 8)
+                        force["mv2"] = payload[6] | (payload[7] << 8)
+                    self.force = force
                 elif mtype == T_PONG:
                     pass
 

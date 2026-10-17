@@ -34,9 +34,10 @@ T_MIC = 0x81                    # 板子 -> 电脑：I2S RX 原始数据（32bit
 T_STAT = 0x82
 T_PONG = 0x83
 T_LOG = 0x84
-T_SENS = 0x86                   # 板子 -> 电脑：力传感器 raw + 毫伏
+T_SENS = 0x86                   # 板子 -> 电脑：力传感器 raw + 毫伏（两个传感器时 8 字节）
 
-FSR_PIN = 8                     # 力传感器信号 -> GPIO8 (ADC1_CH7)
+FSR_PIN = 8                     # 力传感器 1 信号 -> GPIO8 (ADC1_CH7)
+FSR2_PIN = 9                    # 力传感器 2 信号 -> GPIO9 (ADC1_CH8)；没接时电脑端会判定为“未接入”并忽略
 
 # ------------------------------------------------------------------ 音频
 RATE = 24000
@@ -340,13 +341,19 @@ def run():
     last_log = time.ticks_ms()
     last_write_ms = time.ticks_ms()
     last_sens = time.ticks_ms()
-    try:
-        fsr = ADC(Pin(FSR_PIN))
-        fsr.atten(ADC.ATTN_11DB)       # 量程约 0–3.3V
-        print("FSR on GPIO%d ready" % FSR_PIN)
-    except Exception as exc:
-        fsr = None
-        print("FSR init failed:", repr(exc))
+    fsrs = []
+    for pin in (FSR_PIN, FSR2_PIN):
+        try:
+            adc = ADC(Pin(pin))
+            adc.atten(ADC.ATTN_11DB)   # 量程约 0–3.3V
+            fsrs.append(adc)
+            print("FSR on GPIO%d ready" % pin)
+        except Exception as exc:
+            print("FSR GPIO%d init failed:" % pin, repr(exc))
+            if not fsrs:
+                break                  # 传感器 1 都没有就不发压力帧
+            fsrs.append(None)
+    fsr = fsrs[0] if fsrs else None
 
     while True:
         # ---------------------------------------------------- 1) 网络
@@ -469,16 +476,19 @@ def run():
         if sock is not None and fsr is not None and time.ticks_diff(now, last_sens) > 100:
             last_sens = now
             try:
-                raw = fsr.read()
-                try:
-                    mv = fsr.read_uv() // 1000
-                except Exception:
-                    mv = 0
-                fs = bytearray(4)
-                fs[0] = raw & 0xFF
-                fs[1] = (raw >> 8) & 0xFF
-                fs[2] = mv & 0xFF
-                fs[3] = (mv >> 8) & 0xFF
+                # 每个传感器 4 字节：raw(2) + mv(2)；传感器 2 初始化失败时只发 4 字节（老格式）。
+                active = [a for a in fsrs if a is not None]
+                fs = bytearray(4 * len(active))
+                for i, adc in enumerate(active):
+                    raw = adc.read()
+                    try:
+                        mv = adc.read_uv() // 1000
+                    except Exception:
+                        mv = 0
+                    fs[i * 4] = raw & 0xFF
+                    fs[i * 4 + 1] = (raw >> 8) & 0xFF
+                    fs[i * 4 + 2] = mv & 0xFF
+                    fs[i * 4 + 3] = (mv >> 8) & 0xFF
                 n = build_frame(T_SENS, fs, txbuf)
                 if not send_all(sock, txbuf[:n]):
                     sock = None

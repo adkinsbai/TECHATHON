@@ -34,7 +34,7 @@ class Capture:
         if epoch == self.epoch and capture_id == self.capture_id:
             self.feed_mic(payload)
 
-    async def press(self, now=None):
+    async def press(self, now=None, sensor=1):
         if not self.fresh() or self.blocked_until_release or self.phase == 'recording':
             return
         if self.work and not self.work.done():
@@ -42,6 +42,7 @@ class Capture:
                 self.error = BUSY_ADVISORY
             return
         self.clear_busy_advisory()
+        self.active_sensor = sensor
         self.play_token += 1
         if self.play_task:
             self.play_task.cancel()
@@ -50,7 +51,7 @@ class Capture:
         self.capture = bytearray()
         self.capture_id += 1
         self.started = time.monotonic() if now is None else now
-        self.peak_strength = self.pressure.strength
+        self.peak_strength = self.active_pressure().strength
         self.phase = 'recording'
         try:
             await self.send(self.link.set_mode, 2)
@@ -61,7 +62,7 @@ class Capture:
     async def release(self, now=None, capped=False):
         if self.blocked_until_release and not capped:
             # 网页停止按钮不能替代真实松手，避免长按上限后再次启动。
-            if not self.pressure.pressed:
+            if not self.active_pressure().pressed:
                 self.blocked_until_release = False
             return
         if self.phase != 'recording':
@@ -70,7 +71,7 @@ class Capture:
         pcm, self.capture = bytes(self.capture), bytearray()
         self.phase = 'thinking'
         # 网页录音没有实体松手边沿；只阻止仍然按住的 FSR 重触发。
-        self.blocked_until_release = capped and self.pressure.pressed
+        self.blocked_until_release = capped and self.active_pressure().pressed
         try:
             await self.send(self.link.set_mode, 0)
         except Exception as exc:
@@ -78,7 +79,8 @@ class Capture:
             return
         epoch = self.epoch
         touch = {'event_id': uuid.uuid4().hex, 'kind': 'touch',
-                 'duration': round(duration, 3), 'strength': round(self.peak_strength, 4)}
+                 'duration': round(duration, 3), 'strength': round(self.peak_strength, 4),
+                 'sensor': self.active_sensor}
         self.work = asyncio.create_task(self._submit(pcm, touch, epoch))
 
     async def _submit(self, pcm, touch, epoch):

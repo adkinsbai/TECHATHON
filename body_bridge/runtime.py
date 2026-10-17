@@ -16,6 +16,9 @@ class Bridge(Capture, Playback):
         self.volume, self.port = volume, port
         self.drain_seconds, self.send_timeout = drain_seconds, 6
         self.pressure = Pressure()
+        # 第二个传感器（GPIO9）可选：没接时静置读数不稳，永远不会校准，也就不会触发。
+        self.pressure2 = Pressure(rest_min=2500)
+        self.active_sensor = 1
         self.phase, self.error = 'disconnected', ''
         self.epoch, self.conn_id = 0, None
         self.was_connected = False
@@ -49,6 +52,8 @@ class Bridge(Capture, Playback):
         self.clear_speech()
         self.turns.clear()
         self.pressure.reset()
+        self.pressure2.reset()
+        self.active_sensor = 1
         self.last_force = None
         self.blocked_until_release = False
         active = [task for task in (self.work, self.play_task) if task and not task.done()]
@@ -77,16 +82,23 @@ class Bridge(Capture, Playback):
         force = dict(self.link.force)
         if force and force.get('at') != self.last_force and time.time() - force.get('at', 0) <= 2:
             self.last_force = force['at']
-            event = self.pressure.update(force['raw'], now)
-            self.peak_strength = max(self.peak_strength, self.pressure.strength)
+            events = [(1, self.pressure.update(force['raw'], now))]
+            if force.get('raw2') is not None:
+                events.append((2, self.pressure2.update(force['raw2'], now)))
+            self.peak_strength = max(self.peak_strength, self.active_pressure().strength)
             if self.phase == 'calibrating' and self.pressure.baseline is not None:
                 self.phase = 'idle'
-            if event == 'press':
-                await self.press(now)
-            elif event == 'release':
-                await self.release(now)
+            for sensor, event in events:
+                if event == 'press':
+                    await self.press(now, sensor=sensor)
+                elif event == 'release' and sensor == self.active_sensor:
+                    # 只有正在用的那个传感器松手才结束；另一个传感器的松手不影响。
+                    await self.release(now)
         if self.phase == 'recording' and now - self.started >= 15:
             await self.release(now, capped=True)
+
+    def active_pressure(self):
+        return self.pressure2 if self.active_sensor == 2 else self.pressure
 
     def on_event(self, event, data):
         turn = str(data.get('turn_id', ''))
@@ -114,9 +126,13 @@ class Bridge(Capture, Playback):
         stats = dict(self.link.stats)
         stats['rx_age_seconds'] = round(max(0, time.monotonic() - self.link.last_rx), 2) if self.link.last_rx else None
         stats['calibrated'] = self.pressure.baseline is not None
+        sensors = [{'sensor': 1, 'raw': force.get('raw'), 'pressed': self.pressure.pressed,
+                    'calibrated': self.pressure.baseline is not None, 'reported': 'raw' in force},
+                   {'sensor': 2, 'raw': force.get('raw2'), 'pressed': self.pressure2.pressed,
+                    'calibrated': self.pressure2.baseline is not None, 'reported': 'raw2' in force}]
         return {'connected': self.fresh(), 'phase': self.phase,
                 'raw': force.get('raw'), 'mv': force.get('mv'),
-                'pressed': self.pressure.pressed, 'stats': stats,
+                'pressed': self.pressure.pressed or self.pressure2.pressed, 'sensors': sensors, 'stats': stats,
                 'error': self.error or getattr(self.link, 'bind_error', ''), 'tcp_port': self.port}
 
     async def heartbeat(self):
@@ -131,6 +147,7 @@ class Bridge(Capture, Playback):
                     self.capture.clear()
                     await self.send(self.link.set_mode, 0)
                 self.pressure.reset()
+                self.pressure2.reset()
                 self.blocked_until_release = False
                 if self.phase not in ('thinking', 'speaking'):
                     self.phase = 'calibrating' if self.fresh() else 'disconnected'

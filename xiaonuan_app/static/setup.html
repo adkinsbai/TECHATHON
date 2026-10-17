@@ -38,6 +38,8 @@
   pre { background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px;
         font-size: 12px; white-space: pre-wrap; margin: 10px 0 0; color: var(--muted); }
   .done { text-align: center; margin-top: 20px; }
+  .reading { min-width: 110px; align-self: center; font-size: 14px; color: var(--muted); }
+  .reading.on { color: var(--accent); font-weight: 600; }
   .done a.btn { margin: 0 4px; }
 </style>
 </head>
@@ -80,6 +82,15 @@
     <div class="head"><h2>⑤ 板子</h2><span class="pill" id="p-board">检查中</span></div>
     <div class="body" id="b-board"></div>
     <pre id="events" hidden></pre>
+  </section>
+
+  <section class="step">
+    <div class="head"><h2>⑥ 压力传感器位置</h2><span class="pill" id="p-sens">检查中</span></div>
+    <div class="body">给两个传感器起名字（装在哪里），小暖被碰时就知道是哪里。按一下传感器，看下面哪一行变成“按住”。</div>
+    <div class="row"><input id="site1" maxlength="12" placeholder="GPIO8 的位置，例如：头顶"><span class="reading" id="r1">—</span></div>
+    <div class="row"><input id="site2" maxlength="12" placeholder="GPIO9 的位置，例如：手"><span class="reading" id="r2">—</span></div>
+    <div class="row"><button id="save-sites">保存位置</button></div>
+    <div class="msg" id="m-sens"></div>
   </section>
 
   <div class="done">
@@ -127,6 +138,22 @@ async function refresh() {
          : "等待板子连接…… 请给板子通电（插 USB 或充电宝），上电时不要按压力传感器。若热点“已连接的设备”里没有它，检查热点是否为 2.4GHz、名字和密码是否与烧录时一致。";
   }
   $("b-board").textContent = text;
+
+  const sites = s.sites || ["部位1", "部位2"];
+  for (const i of [1, 2]) {
+    const input = $("site" + i);
+    if (document.activeElement !== input && !input.dataset.dirty) input.value = sites[i - 1];
+    const sensor = (s.sensors || []).find(x => x.sensor === i) || {};
+    const el = $("r" + i);
+    el.className = "reading" + (sensor.pressed ? " on" : "");
+    el.textContent = !s.board_ready ? "板子未连接"
+      : !sensor.reported ? "没有数据"
+      : !sensor.calibrated ? (i === 2 ? "未接入/校准中" : "校准中")
+      : sensor.pressed ? "按住" : "松开（" + sensor.raw + "）";
+  }
+  const ready = (s.sensors || []).filter(x => x.calibrated).length;
+  if (!s.board_ready) pill("p-sens", "warn", "等板子");
+  else pill("p-sens", ready === 2 ? "ok" : "warn", "已接入 " + ready + " 个");
   $("events").hidden = !s.events.length;
   $("events").textContent = s.events.join("\n");
 }
@@ -143,6 +170,18 @@ $("fw").onclick = async () => {
   $("m-fw").className = "msg"; $("m-fw").textContent = "请在弹出的窗口里点“是”……";
   try { await post("/api/setup/firewall"); setTimeout(refresh, 2500); $("m-fw").textContent = ""; }
   catch (e) { $("m-fw").className = "msg bad"; $("m-fw").textContent = e.message; }
+};
+for (const i of [1, 2]) $("site" + i).addEventListener("input", e => { e.target.dataset.dirty = "1"; });
+$("save-sites").onclick = async () => {
+  const sites = [$("site1").value.trim(), $("site2").value.trim()];
+  if (!sites[0] || !sites[1]) { $("m-sens").className = "msg bad"; $("m-sens").textContent = "两个位置都要填"; return; }
+  try {
+    const r = await fetch("/api/body/settings", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sites }) });
+    if (!r.ok) throw new Error("保存失败（" + r.status + "）");
+    for (const i of [1, 2]) delete $("site" + i).dataset.dirty;
+    $("m-sens").className = "msg ok"; $("m-sens").textContent = "已保存。";
+  } catch (e) { $("m-sens").className = "msg bad"; $("m-sens").textContent = e.message; }
+  refresh();
 };
 $("hot").onclick = () => post("/api/setup/open-hotspot").catch(() => {});
 refresh();

@@ -26,7 +26,7 @@ def frame(kind, payload):
 
 class FakeBoard:
     def __init__(self, port):
-        self.port, self.raw, self.mode = port, 4095, 0
+        self.port, self.raw, self.raw2, self.mode = port, 4095, 4095, 0
         self.audio = bytearray()
         self.tasks = []
         self.closed = False
@@ -45,7 +45,8 @@ class FakeBoard:
     async def send(self):
         tick = 0
         while True:
-            payload = frame(0x86, struct.pack("<HH", self.raw, round(self.raw / 4095 * 3190)))
+            payload = frame(0x86, struct.pack("<HHHH", self.raw, round(self.raw / 4095 * 3190),
+                                              self.raw2, round(self.raw2 / 4095 * 3190)))
             if tick % 5 == 0:
                 payload += frame(0x82, bytes([self.mode, 0, 0, 0, 0, 0, 221, 0]))
             if self.mode == 2:
@@ -144,6 +145,28 @@ async def verify(args, output):
             assert 499 <= amplitude <= 501, f"expected 10% amplitude500, got {amplitude}"
             board.audio.clear()
 
+            # Second pressure sensor (GPIO9): a short press is reported with its configured site name.
+            await http.patch("/api/body/settings", json={"sites": ["头顶", "手"]})
+
+            async def both_calibrated():
+                sensors = (await state()).get("sensors") or []
+                return len(sensors) == 2 and all(s.get("calibrated") for s in sensors)
+
+            await eventually(both_calibrated, "second pressure sensor did not calibrate")
+            touches_before = (await fixture_stats())["tts_count"]
+            board.raw2 = 2500
+            await asyncio.sleep(.24)
+            board.raw2 = 4095
+
+            async def touched_site():
+                result = await fixture_stats()
+                return result["tts_count"] > touches_before and len(board.audio) > 0 and board.mode == 0
+
+            await eventually(touched_site, "second sensor press did not produce physical response")
+            assert "「手」" in (await fixture_stats())["last_task"], "second sensor site missing from the model note"
+            board.audio.clear()
+            tts_base = (await fixture_stats())["tts_count"]
+
             # Hold a press, transmit microphone packets, release into ASR -> chat -> TTS.
             board.raw = 2400
             await asyncio.sleep(.9)
@@ -151,7 +174,7 @@ async def verify(args, output):
 
             async def utterance():
                 result = await fixture_stats()
-                return result["asr_count"] == 1 and result["tts_count"] >= 2 and len(board.audio) > 0 and board.mode == 0
+                return result["asr_count"] == 1 and result["tts_count"] > tts_base and len(board.audio) > 0 and board.mode == 0
 
             await eventually(utterance, "hold-release voice chain did not complete")
             stats = await fixture_stats()
@@ -192,7 +215,8 @@ async def verify(args, output):
             await eventually(calibrated, "reconnected device did not recalibrate")
             await asyncio.sleep(.8)
             assert not board.audio, "old speech replayed after device reconnect"
-            result = {"real_hardware": False, "pressure_touch": True, "hold_release_asr_chat_tts": True,
+            result = {"real_hardware": False, "pressure_touch": True, "second_sensor_site_touch": True,
+                      "hold_release_asr_chat_tts": True,
                       "same_history": True, "default_volume": 10, "measured_test_pcm_amplitude": amplitude,
                       "web_reply_routes_to_body": True, "zero_mutes": True, "reconnect_discards_old_speech": True,
                       "disconnect_during_playback": True,

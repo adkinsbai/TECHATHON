@@ -83,6 +83,8 @@ def attach_setup_routes(app, *, home, link, hub, brain, config, body_port):
             "board_phase": body.get("phase"),
             "board_ready": bool(body.get("connected")),
             "calibrated": bool((body.get("stats") or {}).get("calibrated")),
+            "sensors": body.get("sensors") or [],
+            "sites": hub.settings()["sites"],
             "events": [f"{t}  {msg}" for t, msg in snap["events"][-6:]],
         }
 

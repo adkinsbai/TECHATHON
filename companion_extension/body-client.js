@@ -36,9 +36,16 @@
     find(".body-record").disabled = !online || state.phase === "thinking";
     find(".body-record").textContent = recording ? "结束并发送" : "开始录音";
     find(".body-calibrate").disabled = !online || recording;
-    const raw = Number.isFinite(state.raw) ? state.raw : null;
+    // 两个压力传感器：进度条显示按得最重的那个，文字显示是哪个部位被按住。
+    const sites = state.settings?.sites || ["部位1", "部位2"];
+    const sensors = Array.isArray(state.sensors) && state.sensors.length ? state.sensors
+      : [{ sensor: 1, raw: state.raw, pressed: state.pressed, calibrated: true }];
+    const live = sensors.filter((s) => s.calibrated && Number.isFinite(s.raw));
+    const raw = live.length ? Math.min(...live.map((s) => s.raw)) : (Number.isFinite(state.raw) ? state.raw : null);
+    const held = sensors.find((s) => s.pressed);
     find("progress").value = online && raw !== null ? Math.max(0, 4095 - raw) : 0;
-    find(".body-pressure-text").textContent = online && raw !== null ? (state.pressed ? "按住中" : "已松开") : "等待数据";
+    find(".body-pressure-text").textContent = online && raw !== null
+      ? (held ? `${sites[held.sensor - 1] || "传感器"}按住中` : `已松开 · ${live.length || 1} 个传感器`) : "等待数据";
     if (document.activeElement !== slider) slider.value = state.settings?.volume ?? 10;
     output.value = `${slider.value}%`;
     renderError();
