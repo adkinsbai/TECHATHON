@@ -10,7 +10,7 @@ from fastapi.responses import FileResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from . import brain, store, voice, weaver
+from . import brain, speech_stream, store, voice, weaver
 from .body_runtime import BodyHub, attach_body_routes
 from .config import PORT, ROOT
 
@@ -26,8 +26,10 @@ WEAVE_DAYS = 3             # 每隔几天（且有新素材时）编织一个新
 
 
 async def _inner_loop():
+    await brain.warm()
     while True:
         await asyncio.sleep(60)
+        await brain.warm()   # 保持和 DeepSeek 的连接不断，随时能快速回话
         try:
             last_user = store.last_user_ts()
             if not last_user:
@@ -46,7 +48,10 @@ async def _inner_loop():
             print("内心活动失败：", e)
         # 每小时看一次：隔了几天、又有新的生活或梦，就编织一个新世界
         try:
-            if now - store.get_state("last_weave_check", 0) > 3600:
+            # 编织也是一次很长的 DeepSeek 调用：只在用户 10 分钟没说话时做，免得拖慢聊天
+            last_msg = store.last_message()
+            idle = not last_msg or now - last_msg["ts"] > 600
+            if idle and now - store.get_state("last_weave_check", 0) > 3600:
                 store.set_state("last_weave_check", now)
                 if weaver.should_weave(days=WEAVE_DAYS) and not _weaving.locked():
                     async with _weaving:
@@ -128,12 +133,68 @@ async def _reply_stream_impl(user_text=None, note=None, heard=None):
         store.set_state("activity", "")
     yield _sse("done", {"text": text, "emotion": emotion, "intensity": intensity,
                         "closeness": store.get_state("closeness", 10.0)})
-    asyncio.create_task(_consolidate_bg())
+    _schedule_consolidate()
 
 
-async def _reply_stream(user_text=None, note=None, heard=None, source="web"):
+# 记忆整理要调一次很长的 DeepSeek（开思考）。如果回完话马上整理，正好撞上用户的下一句，
+# 两个请求同时打过去，下一句的首字会从 2 秒拖到 7~19 秒（实测）。所以等用户停下来 90 秒再整理。
+_CONSOLIDATE_IDLE = 90
+_consolidate_timer: asyncio.Task | None = None
+
+
+def _schedule_consolidate():
+    global _consolidate_timer
+    if _consolidate_timer and not _consolidate_timer.done():
+        _consolidate_timer.cancel()          # 还在聊：往后推
+    _consolidate_timer = asyncio.create_task(_consolidate_when_idle())
+
+
+async def _consolidate_when_idle():
+    try:
+        await asyncio.sleep(_CONSOLIDATE_IDLE)
+    except asyncio.CancelledError:
+        return
+    await _consolidate_bg()
+
+
+def _parse_sse(chunk):
+    name, data = None, []
+    for line in chunk.splitlines():
+        if line.startswith("event:"):
+            name = line[6:].strip()
+        elif line.startswith("data:"):
+            data.append(line[5:].strip())
+    try:
+        return name, json.loads("\n".join(data) or "{}")
+    except json.JSONDecodeError:
+        return name, {}
+
+
+async def _reply_stream(user_text=None, note=None, heard=None, source="web", tts=False):
+    # tts=True：边生成边按句合成语音，用 audio 事件一句句发给前端（不用等整段写完）
+    sp = speech_stream.Speaker(store.get_persona().get("voice")) if tts else None
     async for chunk in body_hub.relay(_reply_stream_impl, user_text=user_text, note=note, heard=heard, source=source):
         yield chunk
+        if sp:
+            ev, data = _parse_sse(chunk)
+            if ev == "delta":
+                sp.feed(data.get("text", ""))
+            elif ev == "done":
+                sp.finish()
+            for a in sp.ready():
+                yield _sse("audio", a)
+    if sp:
+        async for a in sp.drain():
+            yield _sse("audio", a)
+        yield _sse("audio_end", {})
+
+
+@app.get("/api/audio/{audio_id}")
+async def get_audio(audio_id: str):
+    item = speech_stream.get_audio(audio_id)
+    if not item:
+        raise HTTPException(404, "音频已过期")
+    return Response(item[0], media_type=item[1])
 
 
 attach_body_routes(app, body_hub, _reply_stream, voice=voice)
@@ -145,6 +206,7 @@ class ChatIn(BaseModel):
     voice_emotion: str = ""   # 语音识别听出的情绪（只有语音输入时才有）
     voice_event: str = ""
     scene: str = ""           # 所处场景，比如在 3D 星球的小木屋里
+    tts: bool = False         # 要不要边说边合成语音
 
 
 @app.post("/api/chat")
@@ -154,7 +216,7 @@ async def chat(body: ChatIn):
         raise HTTPException(400, "空消息")
     heard = {"emotion": body.voice_emotion, "event": body.voice_event} if (body.voice_emotion or body.voice_event) else None
     note = f"（场景：{body.scene}）" if body.scene else None
-    return StreamingResponse(_reply_stream(text, note=note, heard=heard, source=body.source), media_type="text/event-stream")
+    return StreamingResponse(_reply_stream(text, note=note, heard=heard, source=body.source, tts=body.tts), media_type="text/event-stream")
 
 
 # 章节：每个章节是一个可以进去的世界。以后根据生活和梦境生成的新世界也加在这里。
@@ -256,7 +318,7 @@ async def del_world(world_id: int):
 
 
 @app.post("/api/visit")
-async def visit():
+async def visit(tts: bool = False):
     """在 3D 星球里，对方走进了小木屋。"""
     unlock_chapter("voyage")  # 第一次在小木屋见到噜噜，就解锁第二章
     if time.time() - store.get_state("last_visit_ts", 0) < 120:
@@ -264,11 +326,11 @@ async def visit():
     store.set_state("last_visit_ts", time.time())
     note = ("对方刚刚穿过梦幻星球的草原，走进了你的小木屋来找你（你正坐在屋里的粉色坐垫上）。"
             "惊喜又自然地迎接，可以说说你刚才在屋里做什么。只说一两句。")
-    return StreamingResponse(_reply_stream(None, note), media_type="text/event-stream")
+    return StreamingResponse(_reply_stream(None, note, tts=tts), media_type="text/event-stream")
 
 
 @app.post("/api/hello")
-async def hello():
+async def hello(tts: bool = False):
     """打开页面时：第一次见面、或很久没聊时，主动打招呼。"""
     last = store.last_message()
     if last is None:
@@ -278,11 +340,11 @@ async def hello():
                 "主动打个招呼：可以表达想念、关心对方之前提到的事，或者分享你攒着想说的小事。只说一两句。")
     else:
         return Response(status_code=204)
-    return StreamingResponse(_reply_stream(None, note), media_type="text/event-stream")
+    return StreamingResponse(_reply_stream(None, note, tts=tts), media_type="text/event-stream")
 
 
 @app.post("/api/nudge")
-async def nudge():
+async def nudge(tts: bool = False):
     """对方开着窗口却很久没说话时，TA 轻轻开口（每段沉默最多一次）。"""
     last = store.last_message()
     last_user = store.last_user_ts()
@@ -294,11 +356,12 @@ async def nudge():
     store.set_state("last_nudge_ts", time.time())
     note = (f"对方开着聊天窗口，但已经 {minutes} 分钟没说话了，可能在忙。轻轻地说一句：可以分享你刚刚在做或在想的小事，"
             "或者温柔地关心一下（比如提醒喝水、休息），不要打扰太多，不要追问。只说一两句。")
-    return StreamingResponse(_reply_stream(None, note), media_type="text/event-stream")
+    return StreamingResponse(_reply_stream(None, note, tts=tts), media_type="text/event-stream")
 
 
 class EventIn(BaseModel):
     note: str
+    tts: bool = False
 
 
 @app.post("/api/event")
@@ -307,7 +370,7 @@ async def scene_event(body: EventIn):
     note = body.note.strip()[:400]
     if not note:
         raise HTTPException(400, "空事件")
-    return StreamingResponse(_reply_stream(None, note + " 只说一两句，口语、生动。"), media_type="text/event-stream")
+    return StreamingResponse(_reply_stream(None, note + " 只说一两句，口语、生动。", tts=body.tts), media_type="text/event-stream")
 
 
 @app.post("/api/pet")

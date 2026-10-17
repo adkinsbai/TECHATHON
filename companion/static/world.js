@@ -1409,12 +1409,42 @@ const sceneNote = () => {
   return SCENES[J.state] || SCENES.none;
 };
 
+// 边说边播：服务器每合成好一句就发 audio 事件，排队一句接一句播
+const worldAudioQ = [];
+let worldQPlaying = false;
+function worldEnqueue(url) {
+  worldAudioQ.push(url);
+  if (!worldQPlaying) worldPlayNext();
+}
+function worldPlayNext() {
+  const url = worldAudioQ.shift();
+  if (!url) { worldQPlaying = false; Cat.talking = false; return; }
+  worldQPlaying = true;
+  const a = new Audio(url);
+  bodyWorldAudio = a;
+  a.onplay = () => { Cat.talking = true; };
+  a.onended = a.onerror = () => { if (bodyWorldAudio === a) worldPlayNext(); };
+  a.play().catch(() => { if (bodyWorldAudio === a) worldPlayNext(); });
+}
+
 async function stream(url, body) {
   if (busy || window.BodyClient?.busy) return;
   busy = true;
   Cat.talking = true;
   say("…", true);
   let raw = "", result = null, gotLead = false;
+  // 开着朗读、且声音不是交给玩偶播时，让服务器边生成边合成
+  const wantTts = getVoiceOn() && !window.BodyClient?.routesAudio;
+  if (wantTts) {
+    if (body) body = { ...body, tts: true };
+    else url += (url.includes("?") ? "&" : "?") + "tts=1";
+  }
+  const showFinal = () => {
+    say(result.text);
+    if (!gotLead) Cat.setEmotion(result.emotion);
+    logLine("assistant", result.text);
+    if (!wantTts) speak(result.text);
+  };
   try {
     const res = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: body ? JSON.stringify(body) : null });
     if (res.status === 204) { say(""); return; }
@@ -1437,15 +1467,10 @@ async function stream(url, body) {
           if (lead) { gotLead = true; Cat.setEmotion(lead[1].toLowerCase()); }
           const vis = visibleText(raw);
           if (vis) say(vis, true);
-        } else if (ev === "done") result = data;
+        } else if (ev === "done") { result = data; showFinal(); }   // 文字一写完就定稿
+        else if (ev === "audio") worldEnqueue(data.url);
         else if (ev === "error") throw new Error(data.message);
       }
-    }
-    if (result) {
-      say(result.text);
-      if (!gotLead) Cat.setEmotion(result.emotion);
-      logLine("assistant", result.text);
-      speak(result.text);
     }
   } catch (e) {
     say(`（${e.message}）`);
@@ -1535,6 +1560,8 @@ $("micBtn").addEventListener("click", async () => {
 let bodyWorldSpeechGeneration = 0, bodyWorldAudio = null;
 function stopWorldSpeaking() {
   bodyWorldSpeechGeneration += 1;
+  worldAudioQ.length = 0;
+  worldQPlaying = false;
   if (bodyWorldAudio) { bodyWorldAudio.pause(); bodyWorldAudio = null; }
   if (window.speechSynthesis) speechSynthesis.cancel();
   Cat.talking = false;
@@ -1564,10 +1591,8 @@ async function speak(text) {
     };
     await audio.play();
   } catch {
-    if (speechCancelled() || !window.speechSynthesis) return;
-    const u = new SpeechSynthesisUtterance(text);
-    u.lang = "zh-CN"; u.pitch = 1.15;
-    speechSynthesis.speak(u);
+    // 只用选定的声音（晓伊）：这句合成不了就不出声，不换成浏览器自带的声音
+    Cat.talking = false;
   }
 }
 

@@ -8,3 +8,4 @@ numpy>=1.26,<3
 sherpa-onnx>=1.10,<2
 edge-tts>=6,<8
 huggingface-hub>=0.24,<2
+miniaudio>=1.60,<2

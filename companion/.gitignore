@@ -1,0 +1,15 @@
+# 密钥：绝对不能上传
+.env
+
+# 个人数据：聊天记录、记忆、梦境、人设（含真实个人经历）
+data/
+
+# 本地语音模型（几百 MB，用 download_models.py 下载）
+models/
+
+# Codex 改文件前留的备份
+.body-backups/
+
+# Python
+__pycache__/
+*.pyc

@@ -139,12 +139,45 @@ setInterval(() => { if (!busy) refreshStatus().catch(() => {}); }, 5 * 60 * 1000
 function setStatus(text) { $("status").textContent = text; }
 
 // ---------- 对话（流式） ----------
+// 边说边播：服务器每合成好一句就发一个 audio 事件，这里排队一句接一句地播
+const audioQueue = [];
+let queuePlaying = false;
+function enqueueAudio(url) {
+  audioQueue.push(url);
+  if (!queuePlaying) playNextAudio();
+}
+function playNextAudio() {
+  const url = audioQueue.shift();
+  if (!url) { queuePlaying = false; Avatar.speaking(false); return; }
+  queuePlaying = true;
+  const a = new Audio(url);
+  currentAudio = a;
+  a.onplay = () => Avatar.speaking(true);
+  a.onended = a.onerror = () => { if (currentAudio === a) playNextAudio(); };
+  a.play().catch(() => { if (currentAudio === a) playNextAudio(); });
+}
+
 async function streamReply(url, body) {
   busy = true;
   $("sendBtn").disabled = true;
   Avatar.thinking(true);
   setStatus("正在输入…");
   let msg = null, bubble = null, raw = "", result = null, earlyEmotion = false;
+  // 开着朗读、且声音不是交给玩偶播时，让服务器边生成边合成
+  const wantTts = voiceOn && !window.BodyClient?.routesAudio && persona?.voice !== "browser";
+  if (wantTts) {
+    stopSpeaking();
+    if (body) body = { ...body, tts: true };
+    else url += (url.includes("?") ? "&" : "?") + "tts=1";
+  }
+  const showFinal = () => {
+    if (msg) { msg.remove(); msg = null; }
+    renderMessage("assistant", result.text);
+    if (Avatar.current !== result.emotion) Avatar.setEmotion(result.emotion, result.intensity);
+    $("moodText").textContent = `此刻 · ${Avatar.label(result.emotion)}`;
+    setBond(result.closeness);
+    if (!wantTts) speak(result.text);
+  };
   try {
     const res = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: body ? JSON.stringify(body) : null });
     if (res.status === 204) return null;
@@ -181,19 +214,18 @@ async function streamReply(url, body) {
           scrollDown();
         } else if (ev === "done") {
           result = data;
+          showFinal();        // 文字一写完就定稿，音频在后面继续一句句来
+          busy = false;
+          $("sendBtn").disabled = false;
+          setStatus("在线");
+        } else if (ev === "audio") {
+          enqueueAudio(data.url);
         } else if (ev === "error") {
           throw new Error(data.message);
         }
       }
     }
     if (msg) msg.remove();
-    if (result) {
-      renderMessage("assistant", result.text);
-      if (Avatar.current !== result.emotion) Avatar.setEmotion(result.emotion, result.intensity);
-      $("moodText").textContent = `此刻 · ${Avatar.label(result.emotion)}`;
-      setBond(result.closeness);
-      speak(result.text);
-    }
     return result;
   } catch (e) {
     if (msg) msg.remove();
@@ -263,6 +295,8 @@ let bodySpeechGeneration = 0, bodySpeechForced = false;
 function stopSpeaking() {
   bodySpeechGeneration += 1;
   bodySpeechForced = false;
+  audioQueue.length = 0;
+  queuePlaying = false;
   if (currentAudio) { currentAudio.pause(); currentAudio = null; }
   if (window.speechSynthesis) speechSynthesis.cancel();
   Avatar.speaking(false);
@@ -292,10 +326,9 @@ async function speak(text, force = false) {
       await audio.play();
       return;
     } catch (e) {
-      if (speechCancelled()) return;
-      console.warn("GLM TTS 不可用，改用浏览器语音：", e.message);
-      ttsMode = "browser";
-      $("voiceStatus").textContent = `GLM 语音合成不可用（${e.message.slice(0, 80)}），正在使用浏览器自带的声音。`;
+      // 只用选定的声音（晓伊）：这句合成不了就不出声、只显示文字，不换成浏览器自带的声音
+      if (!speechCancelled()) console.warn("这句语音没合成出来（不换声音）：", e.message);
+      return;
     }
   }
   if (speechCancelled() || !window.speechSynthesis) return;
@@ -644,8 +677,8 @@ async function loadVoices() {
     '<option value="browser">浏览器自带声音</option>';
   sel.value = voices[persona.voice] || persona.voice === "browser" ? persona.voice : Object.keys(voices)[0];
   $("voiceStatus").textContent = [
-    local_tts ? "✓ 本地语音合成（Kokoro）已启用，离线可用" : "本地语音合成模型未找到",
-    local_asr ? "✓ 本地语音识别（SenseVoice）已启用，还能听出你说话的情绪" : "本地语音识别模型未找到",
+    "✓ 声音：微软神经语音（需要联网）。合成失败时这句不出声，不会换成别的声音",
+    local_asr ? "✓ 本地语音识别（SenseVoice）已启用，还能听出你说话的情绪" : "本地语音识别模型未找到（运行 python -m voice_pack.download）",
   ].join("\n");
   syncVoiceToggle();
 }
