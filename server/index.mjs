@@ -60,6 +60,7 @@ const server = http.createServer(async (req, res) => {
     if (!/^(localhost|127\.0\.0\.1)(:\d+)?$/.test(host)) return json(res, 403, { error: '工作台仅支持本机访问。' });
     const url = new URL(req.url, `http://${host}`);
     if (/(^|\/)(\.env(?:\.[^/]*)?|\.local|\.git)(\/|$)/i.test(decodeURIComponent(url.pathname))) return json(res, 403, { error: '此路径不对浏览器开放。' });
+    if (/(^|\/)firmware\/wifi\.json(?:\/|$)/i.test(decodeURIComponent(url.pathname))) return json(res, 403, { error: '本机网络配置不对浏览器开放。' });
     if (url.pathname.startsWith('/api/')) {
       res.setHeader('X-Content-Type-Options', 'nosniff');
       if (req.headers.origin && ![`http://127.0.0.1:${port}`, `http://localhost:${port}`].includes(req.headers.origin)) return json(res, 403, { error: '来源不受支持。' });

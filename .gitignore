@@ -29,3 +29,22 @@ outputs/
 .DS_Store
 Thumbs.db
 Desktop.ini
+
+# Hardware module local files
+__pycache__/
+*.pyc
+*.log
+
+# 运行期数据
+wifi/recordings/
+wifi/inbox/
+wifi/probe_cache.json
+wifi/reply.txt
+wifi/models/
+
+# 本机配置（含 WiFi 密码，不要提交）
+firmware/wifi.json
+
+# 大文件 / 模型
+*.gguf
+llm/

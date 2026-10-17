@@ -1,83 +1,164 @@
-# MORI · 模型与骨骼实验室
+# TECHATHON · 交互式玩偶与 3D 角色资产
 
-为「交互式玩偶 + 3D 桌宠」准备可复用的角色资产。当前版本聚焦生成与绑骨，界面已移除聊天、互动模拟、配色换装和事件动作映射。
+仓库包含两个可独立运行的模块：
 
-**文字 / 图片 → 风格迁移与参考图确认 → Rodin 3D → Tripo 预检查与绑骨 → Blender 检查与修正**
+| 模块 | 入口 | 说明 |
+| --- | --- | --- |
+| MORI 模型与骨骼实验室 | pnpm dev → http://127.0.0.1:5173/ | 文字 / 图片 → 风格迁移 → Rodin 3D → Tripo 自动绑骨 → Blender 检查 |
+| ESP32-S3 WiFi 语音节点 | python wifi/wifi_demo.py → http://127.0.0.1:8081/ | 麦克风、FSR、音频传输与语音演示，见下文 |
 
-## 本机运行
+## MORI 模型与骨骼实验室
 
-需要 Node.js 22.18+。推荐 Node.js 24 和 pnpm 11。
+需要 Node.js 22.18+；在仓库根目录执行 pnpm install 和 pnpm dev。复制 .env.example 为 .env，配置各服务 Key；Blender 4.5 LTS 单独安装。
 
-```sh
-pnpm install
-pnpm dev
-```
+当前聚焦形象生成和骨骼调试，已移除工作台的聊天、互动模拟和换装界面。支持 GLB 导入导出、真实骨骼检查、动画试播和 Blender 工程转换。硬件模块继续保留原有功能，两者尚未接成统一桌宠运行层。
 
-访问 http://127.0.0.1:5173/ 。Windows 已安装依赖时也可双击 start-workbench.cmd。
+[完整启动与使用说明](docs/CHARACTER-WORKBENCH.md) · [接入说明](docs/INTEGRATION.md) · [绑骨路线](docs/RIGGING-ROADMAP.md)
 
-复制 .env.example 为 .env，按需填写：
-
-- OPENAI_API_KEY / OPENAI_BASE_URL / OPENAI_IMAGE_MODEL：图像生成、图文融合和风格迁移，支持 OpenAI 兼容服务。
-- RODIN_API_KEY：从确认图生成静态 3D 模型。
-- TRIPO_API_KEY：上传外部 GLB、识别骨架类型、自动绑骨。
-- TRIPO_PROXY_URL：可选，仅让 Tripo 请求使用你已有的 HTTP CONNECT 代理；保留 HTTPS 证书校验。
-- BLENDER_PATH：可选，Blender 4.5 LTS 可执行文件绝对路径。Windows 自动检查标准安装目录及项目 .local/tools/blender*/blender.exe。
-
-密钥只放在本机后端，不使用 VITE_ 变量。此仓库不包含任何密钥、生成模型或 Blender 安装文件。换电脑需自行准备服务账户和 Blender。
-
-## 两个工作区
-
-- **形象生成**：至少输入文字或参考图。支持保持原风格、软萌毛绒、黏土手办和卡通 3D。先处理二维参考图，确认后才提交 Rodin。支持历史记录、GLB 导入与导出。
-- **骨骼调试**：主路线是 Tripo 预检查 → 确认骨架类型 → 自动绑骨 → 导入骨骼模型 → 生成可编辑 .blend。Blender 转换保留现有骨架、权重、材质、形变和已有动画，不套用另一套模板。
-
-支持线框、真实骨骼层级、蒙皮统计、动画手动试播和调试包导出。没有动画时如实显示，不把静态模型伪装成可执行互动。手工双足模板与 Blender 自动蒙皮保留在折叠的备用工具中。
-
-图像、Rodin、Tripo 分别计费；不会在打开页面时创建付费任务。Tripo 预检查通过后仍需单独确认绑骨。付费提交结果未知时不自动重试。骨骼和权重必须做视觉验收，模型是否适合双足 / 四足等骨架需要实测。
-
-## 检查与部署
-
-```sh
-pnpm test
-pnpm build
-pnpm start
-# 安装 Blender 后，可额外运行本机集成检查
-pnpm test:blender
-```
-
-生产预览仍只监听本机，默认端口 5173；不适合直接暴露到公网。源数据和缓存位于忽略的 .local/，当前模型与草稿另外保存在浏览器中。
-
-[接入说明](docs/INTEGRATION.md) · [Tripo 与 Blender 路线](docs/RIGGING-ROADMAP.md)
+检查：pnpm test、pnpm build；准备 Blender 后可运行 pnpm test:blender。密钥、模型输出、本机网络配置和工具安装不随代码提交。
 
 ---
 
-以下保留项目最初方向的记录，便于回溯。
+## ESP32-S3 语音音箱节点（WiFi）
 
-# Story to World · 走进这一页
+一块 ESP32-S3-N16R8 + ES8311 音频模块 + INMP441 麦克风 + FSR 力传感器，
+通过 **WiFi（TCP）** 和电脑通信：电脑负责解码、识别、回复和语音合成，板子只负责
+"把 PCM 写进 I2S" 和 "把麦克风读出来"。
 
-将文学文本中的场景、氛围与叙事变化，转化为可以探索的 3D 阅读体验。
+### 系统结构
 
-本项目处于黑客松原型探索阶段，计划使用 DeepSeek 进行文本理解与体验规划，使用 Hyper3D Rodin 生成 3D 资产，并通过浏览器呈现空间体验。
-
-## 产品方向
-
-- 原文与空间双向关联：从文字进入场景，从场景返回对应原文。
-- 按阅读进度呈现场景与事件，保留故事的节奏和悬念。
-- 根据文本组合漫游、事件见证、人物跟随、视角切换等体验。
-- 区分原文明示的事实、必要的空间补全与视觉表现选择。
-
-## 技术路线（规划）
-
-```text
-文本 → 结构化的世界与叙事信息 → 空间体验方案
-     → 3D 资产生成与场景布局 → 浏览器阅读与探索
+```
+               ┌──────────────────────── 电脑 (Windows / Python) ───────────────────────┐
+ 浏览器 :8081  │  wifi_demo.py：网页控制台 + TCP 服务端 + 解码/音量/推流                │
+   │           │  asr.py：Vosk 本地识别（中文小模型）                                  │
+   ▼           │  brain.py：离线规则回复（可替换成大模型）                              │
+ 控制台 ──────►│  TTS：Windows SAPI（Huihui 中文女声）                                  │
+               └───────────────▲──────────────────────────────┬───────────────────────┘
+                               │ AUD(96KB/s) / MODE            │ MIC(48KB/s) / STAT / SENS
+                               │                               ▼
+                        ┌──────┴──────────────────────────────────────┐
+                        │            ESP32-S3（MicroPython）           │
+                        │  board_main.py：TCP 客户端 + 环形缓冲 + I2S │
+                        │  es8311.py：Codec 配置                      │
+                        └──────┬───────────────────────┬──────────────┘
+                               │ I2S TX                │ I2S RX / ADC
+                        ES8311 + NS4150B          INMP441 / FSR
+                               │
+                             喇叭
 ```
 
-当前已测试 Rodin MCP 图生 3D。现有测试得到的是单个座椅资产，尚未验证完整房间重建能力。WorldGen 的可调用接口与权限仍待确认。
+### 目录
 
-## 参与共创
+```
+audio-node-v1/
+├─ README.md                  ← 本文件
+├─ docs/
+│  ├─ protocol.md             通信协议（帧格式、消息类型、字段）★重点
+│  ├─ wiring.md               三个器件的接线表
+│  └─ wiring.html             三合一接线图（浏览器打开）
+├─ firmware/
+│  ├─ micropython-esp32s3-1.25.0.bin   板上固件（MicroPython）
+│  ├─ board/
+│  │  ├─ main.py              开机自启入口
+│  │  ├─ board_main.py        板子端主程序（TCP + I2S + ADC）
+│  │  └─ es8311.py            ES8311 驱动（只写不读）
+│  ├─ install_wifi.py         把上面的文件写进板子
+│  ├─ set_wifi.py             生成 wifi.json（SSID / 密码 / 电脑 IP）
+│  └─ wifi.json.example       配置模板
+├─ wifi/                      电脑端
+│  ├─ wifi_demo.py            网页控制台 + 推流 + 录音/识别/回复
+│  ├─ wifi_link.py            帧协议、TCP 服务端、麦克风落盘
+│  ├─ asr.py                  Vosk 本地识别
+│  ├─ brain.py                离线规则回复（可替换）
+│  ├─ agent_demo.py           命令行版"录音→回复→说话"
+│  ├─ board_sim.py            假板子（没有硬件时验证电脑端）
+│  └─ requirements.txt
+└─ tools/
+   └─ board_exec.py           在板子上跑一段 Python 的调试工具
+```
 
-欢迎通过 Issues 讨论需求、设计和实验，通过 Pull Request 提交改进。
+### 快速开始
 
-需要直接推送权限的队友，请将 GitHub 用户名发给仓库维护者，由维护者发送协作者邀请。
+#### 0. 电脑环境
 
-请勿提交 API 密钥、OAuth 凭证或未获授权公开的素材。配置示例使用占位符，实际密钥保存在本地环境变量中。
+```powershell
+cd wifi
+python -m pip install -r requirements.txt
+```
+
+语音识别模型需要单独下载（约 42MB，未随包分发）：
+
+```powershell
+## 下载 vosk-model-small-cn-0.22.zip 后解压到 wifi\models\
+## 最终目录形如： wifi\models\vosk-model-small-cn\{am,conf,graph,ivector}
+```
+
+没有模型时，录音仍能保存，只是不能自动识别。
+
+#### 1. 烧录固件（仅首次）
+
+用 `firmware/micropython-esp32s3-1.25.0.bin` 通过 esptool / Flash Download Tool
+烧到 **0x0**（板子是 ESP32-S3-N16R8）。
+
+#### 2. 配置 WiFi 并写入板子文件
+
+```powershell
+cd firmware
+python set_wifi.py --ssid "你的热点"          # 会提示输密码，并自动填电脑的 WLAN IP
+python install_wifi.py                        # 找串口并把 main.py / board_main.py 等写进去
+```
+
+> 板子只支持 **2.4GHz**；电脑和板子必须在同一个局域网里。
+> 电脑要通过防火墙放行 **TCP 5000**（第一次运行时 Windows 可能会弹窗）。
+
+#### 3. 运行电脑端
+
+```powershell
+cd wifi
+python wifi_demo.py
+```
+
+浏览器打开 <http://127.0.0.1:8081/>：
+
+- **播放/暂停/上下曲/音量/歌单**：音频通过 WiFi 推到板子播放
+- **开始录音**：录一段话，自动识别 → 交给我/规则回复 → 音箱念出来
+- **力传感器**：实时显示 raw / mV
+- **/wiring**：三合一接线图
+
+音乐目录默认是 `D:\CloudMusic` 和本包根目录下的 `music\`，可以在 `wifi_demo.py`
+顶部的 `MUSIC_ROOTS` 里改。
+
+### 通信协议（摘要）
+
+完整说明见 **[docs/protocol.md](docs/protocol.md)**。
+
+一条帧：
+
+```
+AA 55 AA 55 | type(1) | len(2,LE) | payload | checksum(2,LE)
+checksum = (sum(payload) + type*31 + len) & 0xFFFF
+```
+
+| type | 方向 | 名称 | 内容 |
+| --- | --- | --- | --- |
+| 0x01 | 电脑→板子 | AUD | 24kHz 立体声 16bit PCM，每帧 4096 字节（42.7ms） |
+| 0x02 | 电脑→板子 | MODE | 0 空闲 / 1 播放 / 2 录音 |
+| 0x03 | 电脑→板子 | PING | — |
+| 0x81 | 板子→电脑 | MIC | 24kHz 单声道 16bit PCM，≤2048 字节 |
+| 0x82 | 板子→电脑 | STAT | 8 字节：模式/缓冲%/欠载/失步/RSSI/丢帧 |
+| 0x83 | 板子→电脑 | PONG | — |
+| 0x84 | 板子→电脑 | LOG | UTF-8 文本 |
+| 0x86 | 板子→电脑 | SENS | 4 字节：ADC raw(2) + 毫伏(2)，10Hz |
+
+### 已知限制
+
+- **半双工**：麦克风和喇叭共用一路 I2S，录音时不放音、放音时不录音。
+- 力传感器当前若跳线在 D 侧，只能得到 0/4095 两档；放 A 侧才有连续力度值。
+- Vosk 小模型对短命令会听错（例如"换一首"→"患有个"），靠上下文纠错。
+- 只支持 2.4GHz WiFi；建议用手机热点，避免会场网络的设备隔离。
+
+### 第三方组件
+
+- MicroPython（MIT）— `firmware/micropython-esp32s3-1.25.0.bin`
+- Vosk（Apache-2.0）— 通过 pip 安装，中文模型需自行下载
+- miniaudio / pyserial — pip 安装
