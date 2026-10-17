@@ -205,8 +205,8 @@ def attach_body_routes(app, hub, reply_stream, voice=None):
 
     @app.post("/api/body/tts")
     async def local_tts(body: LocalSpeech):
-        # 玩偶和网页用同一个音色（设定里选的，比如微软·晓伊）；玩偶只认 WAV，由 voice.tts_wav 转好。
-        # 微软语音不可用时 voice 里会退回本地音色。
+        # 玩偶和网页用同一个音色（人设默认微软·晓伊）；玩偶只认 WAV，由 voice.tts_wav 转好。
+        # 微软语音重试后仍失败就返回 503，这句不出声，不会换成别的声音。
         if voice is None:
             raise HTTPException(503, "语音合成未就绪")
         persona = hub.store.get_persona() if hasattr(hub.store, "get_persona") else {}

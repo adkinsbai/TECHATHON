@@ -28,7 +28,7 @@
 ```
 
 - 短按压力传感器触发一次接触事件；按住说话，松手后识别并回复。压力只表示局部接触，不能据此判断情绪或空间位置。
-- 实体 ASR/TTS 固定用电脑本地 **SenseVoice / Kokoro**，专用接口为 `/api/body/asr`、`/api/body/tts`；模型缺失明确报错，不自动切在线语音。对话模型仍使用 Companion 自己的语言模型配置。
+- 实体识别用电脑本地 **SenseVoice**，合成用微软 **晓伊（活泼）**（edge-tts，免费免 key、需联网），与网页同一个音色。专用接口为 `/api/body/asr`、`/api/body/tts`；识别模型缺失明确报错，合成失败重试后这句不出声，不换别的声音。对话模型仍使用 Companion 自己的语言模型配置。
 - 扬声器默认 **10% PCM 振幅**，0% 静音；24kHz、16-bit、双声道播放。当前硬件半双工，播放时不录音，再次按压可打断。
 - 实体在线时接管自动语音，网页保留同一份文字和表情。录音上限 15 秒；断线丢弃未完成录音和旧语音。
 
@@ -55,14 +55,14 @@ python install_companion.py --target '原来的 Companion 文件夹' --remember
 ```powershell
 python -m pip install -r body-requirements.txt -r companion/requirements.txt
 Copy-Item companion/.env.example companion/.env
-# 编辑 companion/.env：填写自己的对话模型密钥和本地模型绝对路径
+# 编辑 companion/.env：填写自己的对话模型密钥和识别模型目录
 python install_companion.py --target companion --remember
 .\start-body.ps1
 ```
 
-本地模型需自行准备。`MODELS_DIR` 指向包含 `sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2025-09-09/` 和 `kokoro-int8-multi-lang-v1_1/` 的目录；可先查看 `companion/download_models.py`，需要下载时在 `companion/` 目录手动运行它。下载器会访问 Hugging Face，模型体积与许可证请自行核对，仓库没有附带模型。
+识别模型需自行准备。`MODELS_DIR` 指向包含 `sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2025-09-09/` 的目录（约 230MB）；可先查看 `companion/download_models.py`，需要下载时在 `companion/` 目录手动运行它。下载器会访问 Hugging Face，模型体积与许可证请自行核对，仓库没有附带模型。语音合成用微软晓伊，不需要下载模型，但文字会发给微软合成。
 
-原网页仍保留已有的在线/浏览器音色功能；实体专用语音路径强制本地。空模板没有可用的语言模型密钥，未配置前不能完成真实对话。
+网页和实体共用人设里的音色（默认晓伊）。空模板没有可用的语言模型密钥，未配置前不能完成真实对话。
 
 ## 连接硬件
 

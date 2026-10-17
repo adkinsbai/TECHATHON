@@ -73,9 +73,9 @@ def main():
     async def tts(text, *args, **kwargs):
         return fake_tts(text, *args, **kwargs)
 
-    voice.asr, voice.tts, voice.warm_up = asr, tts, lambda: None
-    voice._local_asr, voice._local_tts = fake_asr, fake_tts
-    voice.local_asr_ready = voice.local_tts_ready = lambda: True
+    voice.asr, voice.tts, voice.tts_wav, voice.warm_up = asr, tts, tts, lambda: None
+    voice._local_asr = fake_asr
+    voice.local_asr_ready = lambda: True
 
     @server.app.get("/__fixture")
     async def fixture_state():

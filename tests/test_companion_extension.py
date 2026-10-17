@@ -141,31 +141,32 @@ class BodyRuntimeTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(queue.empty())
 
 
-class LocalVoice:
-    DEFAULT_LOCAL_VOICE = "local:3"
+class FakeVoice:
+    """仿 companion/app/voice.py：本地 SenseVoice 识别 + 微软晓伊合成。"""
+    DEFAULT_VOICE = "edge:zh-CN-XiaoyiNeural|+0%|+0Hz"
 
     def __init__(self):
         self.ready = True
+        self.tts_ok = True
         self.calls = []
 
     def local_asr_ready(self):
-        return self.ready
-
-    def local_tts_ready(self):
         return self.ready
 
     def _local_asr(self, audio):
         self.calls.append("local_asr")
         return {"text": "本地识别", "emotion": "平静", "event": ""}
 
-    def _local_tts(self, text, voice, speed):
-        self.calls.append(("local_tts", voice))
+    async def tts_wav(self, text, voice=None):
+        self.calls.append(("tts_wav", voice or self.DEFAULT_VOICE))
+        if not self.tts_ok:
+            raise RuntimeError("微软语音连续失败")
         buffer = io.BytesIO()
         with wave.open(buffer, "wb") as wav:
             wav.setnchannels(1)
             wav.setsampwidth(2)
             wav.setframerate(24000)
-            wav.writeframes(b"\0\0" * 200)
+            wav.writeframes(b"\x00\x00" * 200)
         return buffer.getvalue()
 
 
@@ -174,7 +175,7 @@ class BodyHttpTests(unittest.IsolatedAsyncioTestCase):
         self.assertIsNotNone(BodyHub, "Companion physical body HTTP extension is missing")
         self.store = MemoryStore()
         self.hub = BodyHub(self.store)
-        self.voice = LocalVoice()
+        self.voice = FakeVoice()
         self.replies = 0
 
         async def reply(user_text=None, note=None, heard=None, source="web"):
@@ -218,20 +219,22 @@ class BodyHttpTests(unittest.IsolatedAsyncioTestCase):
         event["kind"] = "read_mind"
         self.assertEqual((await self.client.post("/api/body/event", json=event)).status_code, 422)
 
-    async def test_body_audio_calls_only_existing_local_helpers(self):
+    async def test_body_audio_uses_local_asr_and_xiaoyi_tts(self):
         result = await self.client.post("/api/body/asr", files={"file": ("test.wav", b"test", "audio/wav")})
         self.assertEqual(result.status_code, 200)
         self.assertEqual(result.json()["text"], "本地识别")
         result = await self.client.post("/api/body/tts", json={"text": "你好"})
         self.assertEqual(result.status_code, 200)
         self.assertEqual(result.headers["content-type"], "audio/wav")
-        self.assertEqual(self.voice.calls, ["local_asr", ("local_tts", "local:3")])
+        self.assertEqual(self.voice.calls, ["local_asr", ("tts_wav", FakeVoice.DEFAULT_VOICE)])
 
-    async def test_missing_local_models_fail_without_online_fallback(self):
+    async def test_missing_asr_model_and_tts_failure_return_503(self):
         self.voice.ready = False
-        self.assertEqual((await self.client.post("/api/body/tts", json={"text": "你好"})).status_code, 503)
+        self.voice.tts_ok = False
         self.assertEqual((await self.client.post("/api/body/asr", files={"file": ("test.wav", b"x")})).status_code, 503)
-        self.assertEqual(self.voice.calls, [])
+        self.assertEqual((await self.client.post("/api/body/tts", json={"text": "你好"})).status_code, 503)
+        # 识别模型缺失时不调用任何识别；合成失败只尝试晓伊，不换别的声音。
+        self.assertEqual(self.voice.calls, [("tts_wav", FakeVoice.DEFAULT_VOICE)])
 
 
 if __name__ == "__main__":
