@@ -27,8 +27,9 @@ class Pressure:
                 self.baseline = median(self.samples)
                 self.samples.clear()
             return None
-        delta = raw - self.baseline
-        self.strength = max(0.0, min(1.0, delta / max(1, 4095 - self.baseline)))
+        # 当前 FSR 模块空载约 4095；按压时 ADC 下降。
+        delta = self.baseline - raw
+        self.strength = max(0.0, min(1.0, delta / max(1, self.baseline)))
         target = delta >= (self.release_delta if self.pressed else self.press_delta)
         if target == self.pressed:
             self.candidate = None

@@ -13,6 +13,16 @@ from body_bridge.runtime import Bridge
 
 
 class PressureTests(unittest.TestCase):
+    def test_board_fsr_falling_polarity_from_saturated_rest(self):
+        sensor = Pressure(calibration_samples=3, debounce=.1)
+        for at, raw in [(0, 4095), (.1, 4095), (.2, 4095)]:
+            self.assertIsNone(sensor.update(raw, at))
+        self.assertIsNone(sensor.update(2500, .3))
+        self.assertEqual(sensor.update(2500, .41), 'press')
+        self.assertAlmostEqual(sensor.strength, 1595 / 4095)
+        self.assertIsNone(sensor.update(4090, .5))
+        self.assertEqual(sensor.update(4090, .61), 'release')
+
     def calibrated(self):
         sensor = Pressure(calibration_samples=3, debounce=.1)
         for at, raw in [(0, 1000), (.1, 1002), (.2, 998)]:
@@ -22,11 +32,11 @@ class PressureTests(unittest.TestCase):
     def test_rest_calibration_bounce_and_hysteresis(self):
         sensor = self.calibrated()
         self.assertEqual(sensor.baseline, 1000)
-        self.assertIsNone(sensor.update(1300, .3))
+        self.assertIsNone(sensor.update(700, .3))
         self.assertIsNone(sensor.update(1000, .35))
-        self.assertIsNone(sensor.update(1300, .5))
-        self.assertEqual(sensor.update(1300, .61), 'press')
-        self.assertIsNone(sensor.update(1120, .7))
+        self.assertIsNone(sensor.update(700, .5))
+        self.assertEqual(sensor.update(700, .61), 'press')
+        self.assertIsNone(sensor.update(880, .7))
         self.assertTrue(sensor.pressed)
         self.assertIsNone(sensor.update(1000, .8))
         self.assertEqual(sensor.update(1000, .91), 'release')
@@ -59,6 +69,22 @@ class AudioTests(unittest.TestCase):
 
 
 class ClientTests(unittest.IsolatedAsyncioTestCase):
+    async def test_touch_drains_sse_and_propagates_error_with_chat_timeout(self):
+        import httpx
+        requests = []
+        class Fragments(httpx.AsyncByteStream):
+            async def __aiter__(self):
+                yield b'event: delta\ndata: {"text":"hello"}\n\n'
+                yield b'event: error\ndata: {"message":"touch failed"}\n\n'
+        def handle(request):
+            requests.append(request)
+            return httpx.Response(200, stream=Fragments())
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handle), base_url='http://127.0.0.1:8765') as http:
+            client = CompanionClient(http=http)
+            with self.assertRaisesRegex(RuntimeError, 'touch failed'):
+                await client.touch({'event_id': 'a', 'kind': 'touch', 'duration': .2, 'strength': .4})
+            self.assertEqual(requests[0].extensions['timeout']['read'], 90)
+
     async def test_fragmented_utf8_crlf_and_malformed_sse(self):
         raw = ('event: done\r\ndata: {"text":"暖"}\r\n\r\n'
                'event: done\ndata: {broken}\n\n'
@@ -161,8 +187,8 @@ class RuntimeTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_debounced_pressure_contact_reaches_touch_endpoint(self):
         self.bridge.pressure = Pressure(calibration_samples=3, debounce=.1)
-        values = [(0, 1000), (.1, 1000), (.2, 1000),
-                  (.3, 1400), (.41, 1400), (.5, 1000), (.61, 1000)]
+        values = [(0, 4095), (.1, 4095), (.2, 4095),
+                  (.3, 2500), (.41, 2500), (.5, 4090), (.61, 4090)]
         for index, (at, raw) in enumerate(values):
             self.link.force = {'raw': raw, 'mv': 1000, 'at': time.time() + index * .00001}
             await self.bridge.poll(now=at)
@@ -229,6 +255,10 @@ class RuntimeTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(audio[0]), 4096)
         self.assertEqual(struct.unpack('<2h', audio[0][:4]), (1000, 1000))
         self.assertEqual(self.link.sent[-1], ('mode', 0))
+
+    async def test_default_playback_drain_covers_board_dma(self):
+        default = Bridge(self.link, self.client)
+        self.assertGreaterEqual(default.drain_seconds, .4)
 
     async def test_send_failure_is_bounded_and_does_not_stay_speaking(self):
         def stuck(pcm):

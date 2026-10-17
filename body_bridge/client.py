@@ -54,8 +54,11 @@ class CompanionClient:
         return response.json()
 
     async def touch(self, data):
-        response = await self.http.post('/api/body/event', json=data, timeout=10)
-        response.raise_for_status()
+        async with self.http.stream('POST', '/api/body/event', json=data, timeout=90) as response:
+            response.raise_for_status()
+            async for event, payload in parse_sse(response.aiter_bytes()):
+                if event == 'error':
+                    raise RuntimeError(payload.get('message', '接触回应失败'))
 
     async def asr(self, wav):
         response = await self.http.post('/api/asr', files={'file': ('body.wav', wav, 'audio/wav')}, timeout=30)

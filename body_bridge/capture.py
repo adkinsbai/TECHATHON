@@ -73,7 +73,7 @@ class Capture:
     async def _submit(self, pcm, touch, epoch):
         try:
             if touch['duration'] < .35:
-                await asyncio.wait_for(self.client.touch(touch), 12)
+                await asyncio.wait_for(self.client.touch(touch), 95)
             elif pcm:
                 heard = await asyncio.wait_for(self.client.asr(wav_bytes(pcm)), 35)
                 if self.epoch == epoch and self.fresh() and str(heard.get('text', '')).strip():

@@ -9,7 +9,7 @@ from .pressure import Pressure
 
 
 class Bridge(Capture, Playback):
-    def __init__(self, link, client, volume=10, port=5000, drain_seconds=.15):
+    def __init__(self, link, client, volume=10, port=5000, drain_seconds=.4):
         if not isinstance(volume, int) or not 0 <= volume <= 100:
             raise ValueError('音量须为 0..100')
         self.link, self.client = link, client
