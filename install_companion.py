@@ -67,6 +67,58 @@ def _block(text, content, style):
     return _replace(text, '</head>', block + '\n</head>', 'HTML head')
 
 
+def _audio_patch(text, world=False):
+    """Cancel pending TTS as well as active playback when body ownership changes."""
+    if world:
+        edits = (
+            ('async function speak(text) {', '''let bodyWorldSpeechGeneration = 0, bodyWorldAudio = null;
+function stopWorldSpeaking() {
+  bodyWorldSpeechGeneration += 1;
+  if (bodyWorldAudio) { bodyWorldAudio.pause(); bodyWorldAudio = null; }
+  if (window.speechSynthesis) speechSynthesis.cancel();
+  Cat.talking = false;
+}
+
+async function speak(text) {'''),
+            ('  if (!getVoiceOn()) return;', '''  if (!getVoiceOn()) return;
+  stopWorldSpeaking();
+  const speechGeneration = bodyWorldSpeechGeneration;
+  const speechCancelled = () => speechGeneration !== bodyWorldSpeechGeneration || window.BodyClient?.routesAudio;'''),
+            ('    if (!res.ok) throw new Error();', '    if (speechCancelled()) return;\n    if (!res.ok) throw new Error();'),
+            ('    const url = URL.createObjectURL(await res.blob());', '    const blob = await res.blob();\n    if (speechCancelled()) return;\n    const url = URL.createObjectURL(blob);'),
+            ('    const audio = new Audio(url);\n    Cat.talking = true;', '    const audio = new Audio(url);\n    bodyWorldAudio = audio;\n    Cat.talking = true;'),
+            ('    audio.onended = () => { Cat.talking = false; URL.revokeObjectURL(url); };', '''    audio.onplay = () => { if (speechCancelled()) audio.pause(); };
+    audio.onended = audio.onpause = () => {
+      Cat.talking = false; URL.revokeObjectURL(url);
+      if (bodyWorldAudio === audio) bodyWorldAudio = null;
+    };'''),
+            ('    audio.play();\n  } catch {', '    await audio.play();\n  } catch {'),
+            ('    if (!window.speechSynthesis) return;', '    if (speechCancelled() || !window.speechSynthesis) return;'),
+        )
+    else:
+        edits = (
+            ('function stopSpeaking() {', '''let bodySpeechGeneration = 0, bodySpeechForced = false;
+function stopSpeaking() {
+  bodySpeechGeneration += 1;
+  bodySpeechForced = false;'''),
+            ('  stopSpeaking();\n  if (ttsMode === "glm"', '''  stopSpeaking();
+  const speechGeneration = bodySpeechGeneration;
+  bodySpeechForced = force;
+  const speechCancelled = () => speechGeneration !== bodySpeechGeneration || (window.BodyClient?.routesAudio && !force);
+  if (ttsMode === "glm"'''),
+            ('      if (!res.ok) throw new Error((await res.json()).detail);', '      if (speechCancelled()) return;\n      if (!res.ok) throw new Error((await res.json()).detail);'),
+            ('      const url = URL.createObjectURL(await res.blob());', '      const blob = await res.blob();\n      if (speechCancelled()) return;\n      const url = URL.createObjectURL(blob);'),
+            ('      audio.onplay = () => Avatar.speaking(true);', '      audio.onplay = () => { if (speechCancelled()) { audio.pause(); return; } Avatar.speaking(true); };'),
+            ('    } catch (e) {\n      console.warn("GLM TTS', '    } catch (e) {\n      if (speechCancelled()) return;\n      console.warn("GLM TTS'),
+            ('  if (!window.speechSynthesis) return;', '  if (speechCancelled() || !window.speechSynthesis) return;'),
+        )
+    for index, (old, new) in enumerate(edits):
+        if text.count(new) == 1:
+            continue
+        text = _replace(text, old, new, f'{"world" if world else "chat"} audio cancellation {index}')
+    return text
+
+
 def _build(root, original):
     for name in SOURCE:
         if original[name] is None:
@@ -106,7 +158,7 @@ attach_body_routes(app, body_hub, _reply_stream, voice=voice)
     ):
         if new not in js:
             js = _replace(js, old, new, label)
-    texts['static/app.js'] = _block(js, (HERE / 'companion_extension/chat-hooks.js').read_text(encoding='utf-8'), 'js')
+    texts['static/app.js'] = _block(_audio_patch(js), (HERE / 'companion_extension/chat-hooks.js').read_text(encoding='utf-8'), 'js')
     js = texts['static/world.js']
     for old, new, label in (
         ('async function speak(text) {', 'async function speak(text) {\n  if (window.BodyClient?.routesAudio) return;', 'world audio'),
@@ -114,7 +166,7 @@ attach_body_routes(app, body_hub, _reply_stream, voice=voice)
     ):
         if new not in js:
             js = _replace(js, old, new, label)
-    texts['static/world.js'] = _block(js, (HERE / 'companion_extension/world-hooks.js').read_text(encoding='utf-8'), 'js')
+    texts['static/world.js'] = _block(_audio_patch(js, world=True), (HERE / 'companion_extension/world-hooks.js').read_text(encoding='utf-8'), 'js')
     for name in ('static/index.html', 'static/world.html'):
         texts[name] = _block(texts[name], '<link rel="stylesheet" href="/static/body-client.css">\n<script src="/static/body-client.js" defer></script>', 'html')
     result = {name: text.encode('utf-8') for name, text in texts.items()}

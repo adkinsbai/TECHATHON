@@ -9,6 +9,67 @@ from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
 
+CHAT_SPEECH = '''function stopSpeaking() {
+  if (currentAudio) { currentAudio.pause(); currentAudio = null; }
+  if (window.speechSynthesis) speechSynthesis.cancel();
+  Avatar.speaking(false);
+}
+
+async function speak(text, force = false) {
+  if (!voiceOn && !force) return;
+  text = cleanForSpeech(text);
+  if (!text) return;
+  stopSpeaking();
+  if (ttsMode === "glm" && persona?.voice !== "browser") {
+    try {
+      const res = await fetch("/api/tts", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text }) });
+      if (!res.ok) throw new Error((await res.json()).detail);
+      const url = URL.createObjectURL(await res.blob());
+      const audio = new Audio(url);
+      currentAudio = audio;
+      audio.onplay = () => Avatar.speaking(true);
+      audio.onended = audio.onpause = () => { Avatar.speaking(false); URL.revokeObjectURL(url); };
+      await audio.play();
+      return;
+    } catch (e) {
+      console.warn("GLM TTS 不可用，改用浏览器语音：", e.message);
+      ttsMode = "browser";
+      $("voiceStatus").textContent = `GLM 语音合成不可用（${e.message.slice(0, 80)}），正在使用浏览器自带的声音。`;
+    }
+  }
+  if (!window.speechSynthesis) return;
+  const u = new SpeechSynthesisUtterance(text);
+  u.lang = "zh-CN";
+  const zh = speechSynthesis.getVoices().filter((v) => v.lang.startsWith("zh"));
+  u.voice = zh.find((v) => /Xiaoxiao|Xiaoyi|女|Female|Tingting/i.test(v.name)) || zh[0] || null;
+  u.pitch = 1.15;
+  u.rate = 1.02;
+  u.onstart = () => Avatar.speaking(true);
+  u.onend = u.onerror = () => Avatar.speaking(false);
+  speechSynthesis.speak(u);
+}
+'''
+
+WORLD_SPEECH = '''async function speak(text) {
+  if (!getVoiceOn()) return;
+  text = text.replace(/[（(][^）)]*[）)]/g, "").replace(/[\\p{Extended_Pictographic}]/gu, "").trim();
+  try {
+    const res = await fetch("/api/tts", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text }) });
+    if (!res.ok) throw new Error();
+    const url = URL.createObjectURL(await res.blob());
+    const audio = new Audio(url);
+    Cat.talking = true;
+    audio.onended = () => { Cat.talking = false; URL.revokeObjectURL(url); };
+    audio.play();
+  } catch {
+    if (!window.speechSynthesis) return;
+    const u = new SpeechSynthesisUtterance(text);
+    u.lang = "zh-CN"; u.pitch = 1.15;
+    speechSynthesis.speak(u);
+  }
+}
+'''
+
 
 def fixture(root):
     files = {
@@ -23,18 +84,14 @@ class ChatIn(BaseModel):
 async def chat(body):
     return StreamingResponse(_reply_stream(text, note=note, heard=heard), media_type="text/event-stream")
 ''',
-        'static/app.js': '''async function speak(text, force = false) {
-}
-async function send(text, heard = null) {
+        'static/app.js': CHAT_SPEECH + '''async function send(text, heard = null) {
   if (!text || busy) return;
 }
 setInterval(() => {
   streamReply("/api/nudge");
 }, 60000);
 ''',
-        'static/world.js': '''async function speak(text) {
-}
-async function stream(url, body) {
+        'static/world.js': WORLD_SPEECH + '''async function stream(url, body) {
   if (busy) return;
 }
 ''',
@@ -112,7 +169,7 @@ class InstallerTests(unittest.TestCase):
             with self.assertRaises(OSError):
                 module.install(self.root)
         for name, value in self.original.items():
-            self.assertEqual((self.root / name).read_text(), value)
+            self.assertEqual((self.root / name).read_text(encoding='utf-8'), value)
         self.assertFalse((self.root / 'app/body_runtime.py').exists())
 
     def test_concurrent_change_is_not_overwritten(self):

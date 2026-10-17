@@ -4,7 +4,7 @@
   const physicalTurns = new Map();
   let ownedAudio = false;
   window.addEventListener("body:status", ({ detail: d }) => {
-    if (d.connected && !ownedAudio) stopSpeaking();
+    if (d.connected !== ownedAudio && !bodySpeechForced) stopSpeaking();
     if (d.connected || ownedAudio) Avatar.speaking(d.connected && d.phase === "speaking");
     ownedAudio = d.connected;
   });

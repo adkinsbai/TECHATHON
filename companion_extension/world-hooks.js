@@ -2,7 +2,12 @@
 // BEGIN XIAONUAN BODY VIEW
 {
   const physicalTurns = new Map();
-  window.addEventListener("body:status", ({ detail: d }) => { if (d.connected) Cat.talking = d.phase === "speaking"; });
+  let ownedAudio = false;
+  window.addEventListener("body:status", ({ detail: d }) => {
+    if (d.connected !== ownedAudio) stopWorldSpeaking();
+    if (d.connected || ownedAudio) Cat.talking = d.connected && d.phase === "speaking";
+    ownedAudio = d.connected;
+  });
   window.addEventListener("body:turn_start", ({ detail: d }) => { physicalTurns.set(d.turn_id, ""); say("…", true); });
   window.addEventListener("body:user", ({ detail: d }) => logLine("user", d.text));
   window.addEventListener("body:delta", ({ detail: d }) => {
