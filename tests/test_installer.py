@@ -1,5 +1,7 @@
 import importlib.util
 import json
+import os
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -139,6 +141,19 @@ class InstallerTests(unittest.TestCase):
         self.assertFalse(any(p.name in ('.env', 'history.db', 'persona.json') for p in backups))
         for name in ('.env', 'data/history.db', 'models/persona.json'):
             self.assertEqual((self.root / name).read_text(), self.original[name])
+
+    @unittest.skipUnless(os.name == 'nt', 'Windows extended path regression')
+    def test_deep_windows_target_supports_backup_atomic_writes_and_repeat_install(self):
+        module = self.module()
+        deep = self.root.joinpath(*(['deep-source-' + 'x' * 45] * 5))
+        extended = Path('\\\\?\\' + str(deep.absolute()))
+        fixture(extended)
+        self.addCleanup(shutil.rmtree, Path('\\\\?\\' + str(self.root.absolute())) / deep.relative_to(self.root).parts[0])
+        first = module.install(deep)
+        self.assertEqual(len(first['changed']), 8)
+        self.assertTrue(Path(first['backup']).is_dir())
+        self.assertEqual(module.install(deep)['changed'], [])
+        self.assertIn(b'body_hub', (extended / 'app/server.py').read_bytes())
 
     def test_missing_anchor_writes_nothing(self):
         module = self.module()

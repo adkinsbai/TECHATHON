@@ -24,7 +24,18 @@ class InstallError(RuntimeError):
     pass
 
 
+def _filesystem_path(path):
+    """Use Windows extended paths without requiring a global long-path policy change."""
+    path = Path(path).absolute()
+    value = str(path)
+    if os.name == 'nt' and not value.startswith('\\\\?\\'):
+        value = ('\\\\?\\UNC\\' + value[2:]) if value.startswith('\\\\') else ('\\\\?\\' + value)
+        return Path(value)
+    return path
+
+
 def _path(root, name):
+    root = _filesystem_path(root)
     path = root / name
     for candidate in (root, *path.relative_to(root).parents):
         # Relative parents are checked below with their root restored.
@@ -179,11 +190,12 @@ attach_body_routes(app, body_hub, _reply_stream, voice=voice)
 
 def build_changes(root):
     """Return all eight desired source files, with paths relative to Companion."""
-    root = Path(root).absolute()
+    root = _filesystem_path(root)
     return _build(root, {name: _read(root, name) for name in ALLOWED})
 
 
 def _atomic_write(path, content):
+    path = _filesystem_path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     fd, temp = tempfile.mkstemp(prefix='.body-', dir=path.parent)
     try:
@@ -196,7 +208,7 @@ def _atomic_write(path, content):
 
 
 def install(root):
-    root = Path(root).absolute()
+    root = _filesystem_path(root)
     original = {name: _read(root, name) for name in ALLOWED}
     desired = _build(root, original)
     changed = [name for name in ALLOWED if original[name] != desired[name]]
