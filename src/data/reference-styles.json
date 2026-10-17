@@ -1,0 +1,6 @@
+{
+  "preserve": { "label": "保持原风格", "description": "保留参考图质感，统一为完整建模参考图。", "instruction": "Preserve the supplied visual style and materials, or follow the user's explicit style description when no reference image is supplied." },
+  "plush": { "label": "软萌毛绒", "description": "短绒材质、柔软体块，保留清楚的四肢轮廓。", "instruction": "Restyle as a soft plush toy with short fine fabric fibers, rounded padded forms and subtle stitched details. Preserve the character identity and species, with clearly separated limbs and readable joint locations; avoid long fur that hides anatomy." },
+  "clay": { "label": "黏土手办", "description": "哑光黏土、简洁表面，适合先验证模型与骨架。", "instruction": "Restyle as a matte clay figurine with smooth simple surfaces, rounded sculpted shapes and clean color regions. Preserve identity, species and recognizable silhouette. Keep limbs and joints clearly readable." },
+  "toon": { "label": "卡通 3D", "description": "简洁卡通体块与材质，保留角色辨识度。", "instruction": "Restyle as a stylized 3D cartoon character with simple clean materials, readable volumes and restrained surface detail. Preserve the original species, identity and distinctive silhouette, and keep limbs distinct from the torso." }
+}
