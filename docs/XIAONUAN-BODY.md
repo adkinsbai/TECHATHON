@@ -11,8 +11,8 @@
 在本仓库目录打开 PowerShell，使用你电脑上的实际路径：
 
 ```powershell
-& 'C:\Users\10990\AppData\Local\Programs\Python\Python312\python.exe' -m pip install -r body-requirements.txt
-& 'C:\Users\10990\AppData\Local\Programs\Python\Python312\python.exe' install_companion.py --target '原来的 Companion 文件夹' --remember
+python -m pip install -r body-requirements.txt -r companion/requirements.txt
+python install_companion.py --target '原来的 Companion 文件夹' --remember
 ```
 
 安装器只处理 `app/server.py`、`app/body_runtime.py` 和 `static/` 下六个页面/脚本/样式文件。所有定位点先校验，成功后才写入；源码备份在目标 Companion 的 `.body-backups/本次编号/`，附带清单和安装后哈希。安装器不读取、复制或替换 `.env`、`data/`、人设和模型。不要把整个 Companion 文件夹复制进本仓库。
@@ -46,10 +46,10 @@ TCP 5000 一次只能由一个程序占用。请先关闭旧 `wifi_demo.py`、`a
 1. 板子只支持 **2.4GHz Wi-Fi**，电脑和板子需要在同一个局域网。避免开启客户端隔离的访客网络。板子 `wifi.json` 的 `host` 填电脑在该网络上的 IPv4，`port` 填 `5000`，不要填 `127.0.0.1`。
 2. Windows 防火墙需要允许该电脑在可信的专用网络接收 **TCP 5000**。无需把 Companion 的 8765 端口开放给局域网，也无需路由器端口映射。
 3. USB 只用于首次识别芯片、配置 Wi-Fi 和部署已核对的固件；运行期间的音频和传感器数据走 Wi-Fi。现有 USB 线仍可供电。
-4. 本次只枚举到了 **COM11 / VID 1A86:55D3**，尚未探测芯片身份，不能据此认定 ESP32 型号或选择刷机参数。先核对板卡和芯片，再使用 `firmware/set_wifi.py`、`firmware/install_wifi.py`；当前交付没有替实板刷写。
+4. 本次已从 **COM11** 读取并确认 MicroPython 1.25.0 / ESP32-S3 Octal-SPIRAM，并备份了板上相关文件；更新的 `board_main.py`、Wi-Fi 配置和启用标记均已通过 SHA256 读回核验。板子已接入 Wi-Fi 和电脑 TCP 5000。换板时仍须重新确认身份，不能只按 USB 名称选择刷写参数。
 5. 启动/重新校准时让压力传感器保持**空载**，手不要压在上面。网页实体面板应显示新鲜的连接状态、压力读数和音量；页面提供校准及录音控制。
 
-Wi-Fi 密码保留在本机配置中，勿写入文档、日志或提交记录。换网络后重新设置电脑 IPv4 和 Wi-Fi 配置。
+Wi-Fi 密码保留在忽略的本机配置和设备中，勿写入文档、日志或提交记录。换网络后重新设置电脑 IPv4 和 Wi-Fi 配置。已确认的同款板可使用 `tools/body_device.py --port COM11 --config firmware/wifi.json --backup runtime/device-backup-新的编号`：先备份和核对来源，再写入并校验；未知的板上源码会安全停止，保留备份。正常硬复位会执行 `main.py`，原始 REPL 中的软复位可能跳过启动程序。
 
 ## 怎么说话和触碰
 
@@ -67,4 +67,4 @@ Wi-Fi 密码保留在本机配置中，勿写入文档、日志或提交记录�
 python -m unittest discover -s tests -v
 ```
 
-实板仍需逐项验收：芯片识别、固件部署、FSR 空载和按压阈值、真实麦克风可懂度、本地识别与合成耗时、扬声器实际音量、播放末尾完整性、再次按压能否打断、Wi-Fi 连续运行与断线重连。没有真实板卡记录时，这些项目保持“待验收”。
+本次实板已确认：芯片身份、源文件部署读回、Wi-Fi/TCP 连接、FSR 空载读数与校准、实体录音状态回传。本地 SenseVoice/Kokoro 接口已用合成语音做识别环回，未向聊天写入测试内容。真实麦克风可懂度、扬声器听感和末尾完整性、打断手感与长时间 Wi-Fi 稳定性，仍需真人按住说话、松手试听后验收。软件及部署记录见 `XIAONUAN-BODY-VERIFICATION.md`。

@@ -1,143 +1,103 @@
-# ESP32-S3 语音音箱节点（WiFi）
+# 小暖：AI 数字生命体伴侣与 ESP32-S3 实体
 
-一块 ESP32-S3-N16R8 + ES8311 音频模块 + INMP441 麦克风 + FSR 力传感器，
-通过 **WiFi（TCP）** 和电脑通信：电脑负责解码、识别、回复和语音合成，板子只负责
-"把 PCM 写进 I2S" 和 "把麦克风读出来"。
+同一个小暖可以在电脑聊天页、3D 世界和硬件实体之间互动。电脑保存人格、聊天与记忆并生成回复；ESP32-S3 提供压力传感器、麦克风和扬声器。USB 用于配置和供电，日常交互通过局域网 Wi-Fi TCP 连接。
 
-## 系统结构
+本仓库包含完整的电脑端应用源码、实体中间层、网页接入、安装启动工具和 ESP32-S3 固件。个人聊天、实际人设、密钥、Wi-Fi 密码和语音模型不随源码分发。
 
-```
-               ┌──────────────────────── 电脑 (Windows / Python) ───────────────────────┐
- 浏览器 :8081  │  wifi_demo.py：网页控制台 + TCP 服务端 + 解码/音量/推流                │
-   │           │  asr.py：Vosk 本地识别（中文小模型）                                  │
-   ▼           │  brain.py：离线规则回复（可替换成大模型）                              │
- 控制台 ──────►│  TTS：Windows SAPI（Huihui 中文女声）                                  │
-               └───────────────▲──────────────────────────────┬───────────────────────┘
-                               │ AUD(96KB/s) / MODE            │ MIC(48KB/s) / STAT / SENS
-                               │                               ▼
-                        ┌──────┴──────────────────────────────────────┐
-                        │            ESP32-S3（MicroPython）           │
-                        │  board_main.py：TCP 客户端 + 环形缓冲 + I2S │
-                        │  es8311.py：Codec 配置                      │
-                        └──────┬───────────────────────┬──────────────┘
-                               │ I2S TX                │ I2S RX / ADC
-                        ES8311 + NS4150B          INMP441 / FSR
-                               │
-                             喇叭
-```
+## 给 Claude 的接手入口
 
-## 目录
+按顺序阅读：
 
-```
-audio-node-v1/
-├─ README.md                  ← 本文件
-├─ docs/
-│  ├─ protocol.md             通信协议（帧格式、消息类型、字段）★重点
-│  ├─ wiring.md               三个器件的接线表
-│  └─ wiring.html             三合一接线图（浏览器打开）
-├─ firmware/
-│  ├─ micropython-esp32s3-1.25.0.bin   板上固件（MicroPython）
-│  ├─ board/
-│  │  ├─ main.py              开机自启入口
-│  │  ├─ board_main.py        板子端主程序（TCP + I2S + ADC）
-│  │  └─ es8311.py            ES8311 驱动（只写不读）
-│  ├─ install_wifi.py         把上面的文件写进板子
-│  ├─ set_wifi.py             生成 wifi.json（SSID / 密码 / 电脑 IP）
-│  └─ wifi.json.example       配置模板
-├─ wifi/                      电脑端
-│  ├─ wifi_demo.py            网页控制台 + 推流 + 录音/识别/回复
-│  ├─ wifi_link.py            帧协议、TCP 服务端、麦克风落盘
-│  ├─ asr.py                  Vosk 本地识别
-│  ├─ brain.py                离线规则回复（可替换）
-│  ├─ agent_demo.py           命令行版"录音→回复→说话"
-│  ├─ board_sim.py            假板子（没有硬件时验证电脑端）
-│  └─ requirements.txt
-└─ tools/
-   └─ board_exec.py           在板子上跑一段 Python 的调试工具
+1. [CLAUDE.md](CLAUDE.md)：运行哪份应用、修改入口、接手步骤。
+2. [MEMORY.md](MEMORY.md)：工程决策、已踩过的坑、实测边界与剩余工作。
+3. [AGENTS.md](AGENTS.md)：代码代理必须遵守的项目约束。
+4. [SKILLS.md](SKILLS.md) 和 [项目 skill](.claude/skills/xiaonuan-body-development/SKILL.md)：开发、验证与交接流程。
+5. [验证记录](docs/XIAONUAN-BODY-VERIFICATION.md) 与 [安装使用说明](docs/XIAONUAN-BODY.md)。
+
+这里的 memory 是工程交接记录，不是用户私人的聊天记忆；skill 也是本项目的工作指南，不包含电脑上的个人 skill 库。
+
+## 交互与架构
+
+```text
+聊天页 / 3D 世界 ────── 同一个 Companion：人格、聊天库、记忆、回复锁
+                                 │ 本机 HTTP / SSE
+                           body_bridge 中间层
+                                 │ Wi-Fi TCP 5000
+                           ESP32-S3 实体
+                         FSR / INMP441 / ES8311
 ```
 
-## 快速开始
+- 短按压力传感器触发一次接触事件；按住说话，松手后识别并回复。压力只表示局部接触，不能据此判断情绪或空间位置。
+- 实体 ASR/TTS 固定用电脑本地 **SenseVoice / Kokoro**，专用接口为 `/api/body/asr`、`/api/body/tts`；模型缺失明确报错，不自动切在线语音。对话模型仍使用 Companion 自己的语言模型配置。
+- 扬声器默认 **10% PCM 振幅**，0% 静音；24kHz、16-bit、双声道播放。当前硬件半双工，播放时不录音，再次按压可打断。
+- 实体在线时接管自动语音，网页保留同一份文字和表情。录音上限 15 秒；断线丢弃未完成录音和旧语音。
 
-### 0. 电脑环境
+## 运行已有的小暖
+
+当前电脑已有原应用时，继续使用原来的 Companion 根目录，保留它的 `.env`、`data/`、人设和模型。不要用新克隆的空数据目录替换原应用。
+
+环境：Windows、Python **3.12**。安装依赖、接入原应用：
 
 ```powershell
-cd wifi
-python -m pip install -r requirements.txt
+python -m pip install -r body-requirements.txt -r companion/requirements.txt
+python install_companion.py --target '原来的 Companion 文件夹' --remember
+.\start-body.ps1
 ```
 
-语音识别模型需要单独下载（约 42MB，未随包分发）：
+以后可双击 `start-body.cmd`。安装器只部署八个相关源码文件，先检查定位点再备份写入；不读写聊天、模型或密钥。原目录和 Python 路径保存在忽略的 `.local-body.json`。
+
+正式页面：[聊天](http://127.0.0.1:8765/) / [3D 世界](http://127.0.0.1:8765/world)。启动器会检查监听服务的身份，复用可用进程；探测超时不会直接结束原服务。完整行为与回退说明见[安装说明](docs/XIAONUAN-BODY.md)。
+
+## 在新电脑运行源码包
+
+`companion/` 是从实际运行应用导出的源码快照，包含聊天、人格、记忆、本地语音和 3D 页面实现。导出白名单及逐文件 SHA256 见 [SOURCE-MANIFEST.json](companion/SOURCE-MANIFEST.json)。它不含原用户数据，新电脑首次启动会生成自己的空数据目录。
 
 ```powershell
-# 下载 vosk-model-small-cn-0.22.zip 后解压到 wifi\models\
-# 最终目录形如： wifi\models\vosk-model-small-cn\{am,conf,graph,ivector}
+python -m pip install -r body-requirements.txt -r companion/requirements.txt
+Copy-Item companion/.env.example companion/.env
+# 编辑 companion/.env：填写自己的对话模型密钥和本地模型绝对路径
+python install_companion.py --target companion --remember
+.\start-body.ps1
 ```
 
-没有模型时，录音仍能保存，只是不能自动识别。
+本地模型需自行准备。`MODELS_DIR` 指向包含 `sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2025-09-09/` 和 `kokoro-int8-multi-lang-v1_1/` 的目录；可先查看 `companion/download_models.py`，需要下载时在 `companion/` 目录手动运行它。下载器会访问 Hugging Face，模型体积与许可证请自行核对，仓库没有附带模型。
 
-### 1. 烧录固件（仅首次）
+原网页仍保留已有的在线/浏览器音色功能；实体专用语音路径强制本地。空模板没有可用的语言模型密钥，未配置前不能完成真实对话。
 
-用 `firmware/micropython-esp32s3-1.25.0.bin` 通过 esptool / Flash Download Tool
-烧到 **0x0**（板子是 ESP32-S3-N16R8）。
+## 连接硬件
 
-### 2. 配置 WiFi 并写入板子文件
+1. 确认真实芯片/运行时身份，再按 [接线表](docs/wiring.md) 和 [协议](docs/protocol.md) 核对硬件；不要只凭 USB 名称刷写。
+2. 电脑与板子连同一个 **2.4GHz Wi-Fi**。`firmware/wifi.json` 的 `host` 是电脑的局域网 IPv4，`port` 为 5000。配置模板在 `firmware/wifi.json.example`；密码只存本机忽略文件。
+3. 只向可信专用网络放行 TCP 5000，Companion 页面仍只监听本机。关闭占用同端口的旧 `wifi_demo.py`。
+4. 使用 `tools/body_device.py` 备份、核对来源、部署、SHA256 读回校验后正常复位。具体命令和换网步骤见[安装说明](docs/XIAONUAN-BODY.md)。它不会替换整块 MicroPython 固件，也不会覆盖无关设备文件。
+5. 开机/校准时让 FSR 保持空载，面板显示新鲜连接和校准完成后再按压。
+
+## 验证
+
+单元与回归测试需要 Python 依赖，Windows 启动测试需要 PowerShell，网页音频测试需要 Node.js：
 
 ```powershell
-cd firmware
-python set_wifi.py --ssid "你的热点"          # 会提示输密码，并自动填电脑的 WLAN IP
-python install_wifi.py                        # 找串口并把 main.py / board_main.py 等写进去
+python -B -m unittest discover -s tests -q
+python tests/body_e2e.py --source companion --api-port 18766 --tcp-port 19501
 ```
 
-> 板子只支持 **2.4GHz**；电脑和板子必须在同一个局域网里。
-> 电脑要通过防火墙放行 **TCP 5000**（第一次运行时 Windows 可能会弹窗）。
+第二条使用隔离数据、模拟板和假语音/回复，不占正式端口、不写用户聊天。完整软件记录、本地模型环回和真实设备结果见[验证记录](docs/XIAONUAN-BODY-VERIFICATION.md)。`tools/body_voice_check.py` 可对正在运行的本地语音接口做环回检查，不播放喇叭、不写聊天。
 
-### 3. 运行电脑端
+实测已确认芯片、部署读回、Wi-Fi/TCP、压力校准，以及两轮实际 ASR → chat → TTS 接口成功。真实麦克风可懂度、扬声器听感与尾音、打断手感和长时间稳定性仍需真人验收。
 
-```powershell
-cd wifi
-python wifi_demo.py
-```
+## 目录与维护
 
-浏览器打开 <http://127.0.0.1:8081/>：
+| 路径 | 内容 |
+| --- | --- |
+| `companion/app/`, `companion/static/` | 完整电脑端源码、聊天/3D界面与资源 |
+| `companion_extension/` | 部署到 Companion 的实体接口、面板和浏览器同步代码 |
+| `body_bridge/` | TCP、压力检测、录音、同库对话、实体播放 |
+| `install_companion.py`, `start-body.*` | 安全安装、记住本地路径、检查并启动服务 |
+| `firmware/board/`, `tools/body_device.py` | 板上源码与备份/部署工具 |
+| `tests/`, `tools/body_fixture.py` | 回归测试和隔离联调 |
+| `docs/superpowers/` | 设计约定与实施计划 |
+| `wifi/` | 原仓库保留的独立音箱演示；接入小暖时不同时运行 |
 
-- **播放/暂停/上下曲/音量/歌单**：音频通过 WiFi 推到板子播放
-- **开始录音**：录一段话，自动识别 → 交给我/规则回复 → 音箱念出来
-- **力传感器**：实时显示 raw / mV
-- **/wiring**：三合一接线图
+扩展功能的主维护源是 `companion_extension/`；修改后通过安装器更新并核对 `companion/` 中对应文件，导出清单记录最初快照而非持续变化的版本锁。涉及完整应用核心的修改，应单独准备可回退源码补丁，安装器不会整目录同步。
 
-音乐目录默认是 `D:\CloudMusic` 和本包根目录下的 `music\`，可以在 `wifi_demo.py`
-顶部的 `MUSIC_ROOTS` 里改。
-
-## 通信协议（摘要）
-
-完整说明见 **[docs/protocol.md](docs/protocol.md)**。
-
-一条帧：
-
-```
-AA 55 AA 55 | type(1) | len(2,LE) | payload | checksum(2,LE)
-checksum = (sum(payload) + type*31 + len) & 0xFFFF
-```
-
-| type | 方向 | 名称 | 内容 |
-| --- | --- | --- | --- |
-| 0x01 | 电脑→板子 | AUD | 24kHz 立体声 16bit PCM，每帧 4096 字节（42.7ms） |
-| 0x02 | 电脑→板子 | MODE | 0 空闲 / 1 播放 / 2 录音 |
-| 0x03 | 电脑→板子 | PING | — |
-| 0x81 | 板子→电脑 | MIC | 24kHz 单声道 16bit PCM，≤2048 字节 |
-| 0x82 | 板子→电脑 | STAT | 8 字节：模式/缓冲%/欠载/失步/RSSI/丢帧 |
-| 0x83 | 板子→电脑 | PONG | — |
-| 0x84 | 板子→电脑 | LOG | UTF-8 文本 |
-| 0x86 | 板子→电脑 | SENS | 4 字节：ADC raw(2) + 毫伏(2)，10Hz |
-
-## 已知限制
-
-- **半双工**：麦克风和喇叭共用一路 I2S，录音时不放音、放音时不录音。
-- 力传感器当前若跳线在 D 侧，只能得到 0/4095 两档；放 A 侧才有连续力度值。
-- Vosk 小模型对短命令会听错（例如"换一首"→"患有个"），靠上下文纠错。
-- 只支持 2.4GHz WiFi；建议用手机热点，避免会场网络的设备隔离。
-
-## 第三方组件
-
-- MicroPython（MIT）— `firmware/micropython-esp32s3-1.25.0.bin`
-- Vosk（Apache-2.0）— 通过 pip 安装，中文模型需自行下载
-- miniaudio / pyserial — pip 安装
+原硬件演示的说明保留在 [HARDWARE-LEGACY.md](docs/HARDWARE-LEGACY.md)。第三方音频、模型与 3D 资源的许可需在再分发时分别核对；本 PR 的源码整理不新增对这些组件的授权。

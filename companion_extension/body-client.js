@@ -24,7 +24,10 @@
     get busy() { return !!externalTurn || (connected() && ["recording", "listening", "thinking"].includes(state.phase)); },
     get state() { return { ...state, connected: connected() }; } };
 
-  function showError(message = "") { error.textContent = message; error.hidden = !message; }
+  let controlError = "";
+  function renderError() { const message = controlError || state.error || "";
+    error.textContent = message; error.hidden = !message; }
+  function showError(message = "") { controlError = message; renderError(); }
   function render() {
     const online = connected(), recording = ["listening", "recording"].includes(state.phase);
     panel.dataset.connected = String(online);
@@ -38,7 +41,7 @@
     find(".body-pressure-text").textContent = online && raw !== null ? (state.pressed ? "按住中" : "已松开") : "等待数据";
     if (document.activeElement !== slider) slider.value = state.settings?.volume ?? 10;
     output.value = `${slider.value}%`;
-    if (state.error) showError(state.error);
+    renderError();
   }
   function acceptStatus(next) {
     state = { ...next, settings: next.settings || state.settings };
