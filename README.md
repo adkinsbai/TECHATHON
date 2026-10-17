@@ -1,31 +1,10 @@
-# TECHATHON · 交互式玩偶与 3D 角色资产
-
-仓库包含两个可独立运行的模块：
-
-| 模块 | 入口 | 说明 |
-| --- | --- | --- |
-| MORI 模型与骨骼实验室 | pnpm dev → http://127.0.0.1:5173/ | 文字 / 图片 → 风格迁移 → Rodin 3D → Tripo 自动绑骨 → Blender 检查 |
-| ESP32-S3 WiFi 语音节点 | python wifi/wifi_demo.py → http://127.0.0.1:8081/ | 麦克风、FSR、音频传输与语音演示，见下文 |
-
-## MORI 模型与骨骼实验室
-
-需要 Node.js 22.18+；在仓库根目录执行 pnpm install 和 pnpm dev。复制 .env.example 为 .env，配置各服务 Key；Blender 4.5 LTS 单独安装。
-
-当前聚焦形象生成和骨骼调试，已移除工作台的聊天、互动模拟和换装界面。支持 GLB 导入导出、真实骨骼检查、动画试播和 Blender 工程转换。硬件模块继续保留原有功能，两者尚未接成统一桌宠运行层。
-
-[完整启动与使用说明](docs/CHARACTER-WORKBENCH.md) · [接入说明](docs/INTEGRATION.md) · [绑骨路线](docs/RIGGING-ROADMAP.md)
-
-检查：pnpm test、pnpm build；准备 Blender 后可运行 pnpm test:blender。密钥、模型输出、本机网络配置和工具安装不随代码提交。
-
----
-
-## ESP32-S3 语音音箱节点（WiFi）
+# ESP32-S3 语音音箱节点（WiFi）
 
 一块 ESP32-S3-N16R8 + ES8311 音频模块 + INMP441 麦克风 + FSR 力传感器，
 通过 **WiFi（TCP）** 和电脑通信：电脑负责解码、识别、回复和语音合成，板子只负责
 "把 PCM 写进 I2S" 和 "把麦克风读出来"。
 
-### 系统结构
+## 系统结构
 
 ```
                ┌──────────────────────── 电脑 (Windows / Python) ───────────────────────┐
@@ -47,7 +26,7 @@
                              喇叭
 ```
 
-### 目录
+## 目录
 
 ```
 audio-node-v1/
@@ -77,9 +56,9 @@ audio-node-v1/
    └─ board_exec.py           在板子上跑一段 Python 的调试工具
 ```
 
-### 快速开始
+## 快速开始
 
-#### 0. 电脑环境
+### 0. 电脑环境
 
 ```powershell
 cd wifi
@@ -89,18 +68,18 @@ python -m pip install -r requirements.txt
 语音识别模型需要单独下载（约 42MB，未随包分发）：
 
 ```powershell
-## 下载 vosk-model-small-cn-0.22.zip 后解压到 wifi\models\
-## 最终目录形如： wifi\models\vosk-model-small-cn\{am,conf,graph,ivector}
+# 下载 vosk-model-small-cn-0.22.zip 后解压到 wifi\models\
+# 最终目录形如： wifi\models\vosk-model-small-cn\{am,conf,graph,ivector}
 ```
 
 没有模型时，录音仍能保存，只是不能自动识别。
 
-#### 1. 烧录固件（仅首次）
+### 1. 烧录固件（仅首次）
 
 用 `firmware/micropython-esp32s3-1.25.0.bin` 通过 esptool / Flash Download Tool
 烧到 **0x0**（板子是 ESP32-S3-N16R8）。
 
-#### 2. 配置 WiFi 并写入板子文件
+### 2. 配置 WiFi 并写入板子文件
 
 ```powershell
 cd firmware
@@ -111,7 +90,7 @@ python install_wifi.py                        # 找串口并把 main.py / board_
 > 板子只支持 **2.4GHz**；电脑和板子必须在同一个局域网里。
 > 电脑要通过防火墙放行 **TCP 5000**（第一次运行时 Windows 可能会弹窗）。
 
-#### 3. 运行电脑端
+### 3. 运行电脑端
 
 ```powershell
 cd wifi
@@ -128,7 +107,7 @@ python wifi_demo.py
 音乐目录默认是 `D:\CloudMusic` 和本包根目录下的 `music\`，可以在 `wifi_demo.py`
 顶部的 `MUSIC_ROOTS` 里改。
 
-### 通信协议（摘要）
+## 通信协议（摘要）
 
 完整说明见 **[docs/protocol.md](docs/protocol.md)**。
 
@@ -150,14 +129,14 @@ checksum = (sum(payload) + type*31 + len) & 0xFFFF
 | 0x84 | 板子→电脑 | LOG | UTF-8 文本 |
 | 0x86 | 板子→电脑 | SENS | 4 字节：ADC raw(2) + 毫伏(2)，10Hz |
 
-### 已知限制
+## 已知限制
 
 - **半双工**：麦克风和喇叭共用一路 I2S，录音时不放音、放音时不录音。
 - 力传感器当前若跳线在 D 侧，只能得到 0/4095 两档；放 A 侧才有连续力度值。
 - Vosk 小模型对短命令会听错（例如"换一首"→"患有个"），靠上下文纠错。
 - 只支持 2.4GHz WiFi；建议用手机热点，避免会场网络的设备隔离。
 
-### 第三方组件
+## 第三方组件
 
 - MicroPython（MIT）— `firmware/micropython-esp32s3-1.25.0.bin`
 - Vosk（Apache-2.0）— 通过 pip 安装，中文模型需自行下载
