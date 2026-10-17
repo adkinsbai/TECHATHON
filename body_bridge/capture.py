@@ -52,14 +52,17 @@ class Capture:
 
     async def release(self, now=None, capped=False):
         if self.blocked_until_release and not capped:
-            self.blocked_until_release = False
+            # 网页停止按钮不能替代真实松手，避免长按上限后再次启动。
+            if not self.pressure.pressed:
+                self.blocked_until_release = False
             return
         if self.phase != 'recording':
             return
         duration = max(0, (time.monotonic() if now is None else now) - self.started)
         pcm, self.capture = bytes(self.capture), bytearray()
         self.phase = 'thinking'
-        self.blocked_until_release = capped
+        # 网页录音没有实体松手边沿；只阻止仍然按住的 FSR 重触发。
+        self.blocked_until_release = capped and self.pressure.pressed
         try:
             await self.send(self.link.set_mode, 0)
         except Exception as exc:

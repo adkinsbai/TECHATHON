@@ -61,7 +61,7 @@ class CompanionClient:
                     raise RuntimeError(payload.get('message', '接触回应失败'))
 
     async def asr(self, wav):
-        response = await self.http.post('/api/asr', files={'file': ('body.wav', wav, 'audio/wav')}, timeout=30)
+        response = await self.http.post('/api/body/asr', files={'file': ('body.wav', wav, 'audio/wav')}, timeout=30)
         response.raise_for_status()
         heard = response.json()
         if not isinstance(heard, dict):
@@ -78,7 +78,7 @@ class CompanionClient:
                     raise RuntimeError(payload.get('message', '对话失败'))
 
     async def tts(self, text):
-        async with self.http.stream('POST', '/api/tts', json={'text': text}, timeout=30) as response:
+        async with self.http.stream('POST', '/api/body/tts', json={'text': text}, timeout=30) as response:
             response.raise_for_status()
             data = bytearray()
             async for chunk in response.aiter_bytes():

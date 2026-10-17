@@ -85,6 +85,20 @@ class ClientTests(unittest.IsolatedAsyncioTestCase):
                 await client.touch({'event_id': 'a', 'kind': 'touch', 'duration': .2, 'strength': .4})
             self.assertEqual(requests[0].extensions['timeout']['read'], 90)
 
+    async def test_local_voice_unavailable_never_falls_back_to_generic_voice_routes(self):
+        import httpx
+        paths = []
+        def handle(request):
+            paths.append(request.url.path)
+            return httpx.Response(503, json={'detail': '本地模型未就绪'})
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handle), base_url='http://127.0.0.1:8765') as http:
+            client = CompanionClient(http=http)
+            with self.assertRaises(httpx.HTTPStatusError):
+                await client.asr(wav_bytes(bytes(480)))
+            with self.assertRaises(httpx.HTTPStatusError):
+                await client.tts('你好')
+        self.assertEqual(paths, ['/api/body/asr', '/api/body/tts'])
+
     async def test_fragmented_utf8_crlf_and_malformed_sse(self):
         raw = ('event: done\r\ndata: {"text":"暖"}\r\n\r\n'
                'event: done\ndata: {broken}\n\n'
@@ -100,7 +114,7 @@ class ClientTests(unittest.IsolatedAsyncioTestCase):
         calls = []
         def handle(request):
             calls.append(request)
-            if request.url.path == '/api/asr':
+            if request.url.path.endswith('/asr'):
                 self.assertIn(b'name="file"', request.content)
                 return httpx.Response(200, json={'text': '你好', 'emotion': 'calm', 'event': 'speech'})
             if request.url.path == '/api/chat':
@@ -109,9 +123,11 @@ class ClientTests(unittest.IsolatedAsyncioTestCase):
         async with httpx.AsyncClient(transport=httpx.MockTransport(handle), base_url='http://127.0.0.1:8765') as http:
             client = CompanionClient(http=http)
             heard = await client.asr(wav_bytes(bytes(480)))
+            self.assertEqual(calls[-1].url.path, '/api/body/asr')
             await client.chat(heard)
             self.assertEqual(json.loads(calls[-1].content), {'text': '你好', 'voice_emotion': 'calm', 'voice_event': 'speech', 'source': 'body'})
             self.assertEqual(await client.tts('你好'), b'audio')
+            self.assertEqual(calls[-1].url.path, '/api/body/tts')
             self.assertEqual(json.loads(calls[-1].content), {'text': '你好'})
 
 
@@ -197,6 +213,7 @@ class RuntimeTests(unittest.IsolatedAsyncioTestCase):
         self.assertGreater(self.client.calls[0][1]['strength'], 0)
 
     async def test_capture_cap_sends_once_and_waits_for_release(self):
+        self.bridge.pressure.pressed = True
         await self.bridge.press(1)
         self.bridge.feed_mic(bytes(1000000))
         self.assertLessEqual(len(self.bridge.capture), 15 * 24000 * 2)
@@ -204,10 +221,40 @@ class RuntimeTests(unittest.IsolatedAsyncioTestCase):
         await self.bridge.wait_work()
         await self.bridge.press(17)
         self.assertNotEqual(self.bridge.phase, 'recording')
+        self.bridge.pressure.pressed = False
         await self.bridge.release(18)
         await self.bridge.press(19)
         self.assertEqual(self.bridge.phase, 'recording')
         self.assertEqual([c[0] for c in self.client.calls].count('asr'), 1)
+
+    async def test_browser_record_can_restart_after_cap_without_sensor_release(self):
+        commands = [{'command': 'record_start'}]
+        async def status(data):
+            batch = list(commands)
+            commands.clear()
+            return {'settings': {'volume': 10}, 'commands': batch}
+        self.client.status = status
+        await self.bridge.heartbeat()
+        self.bridge.feed_mic(bytes(4800))
+        self.bridge.started -= 16
+        await self.bridge.poll()
+        await self.bridge.wait_work()
+        commands.append({'command': 'record_start'})
+        await self.bridge.heartbeat()
+        self.assertEqual(self.bridge.phase, 'recording')
+
+    async def test_browser_stop_does_not_unblock_a_physically_held_capped_press(self):
+        self.bridge.pressure.pressed = True
+        await self.bridge.press(1)
+        self.bridge.feed_mic(bytes(4800))
+        await self.bridge.poll(now=16.1)
+        await self.bridge.wait_work()
+        async def status(data):
+            return {'commands': ['record_stop', 'record_start']}
+        self.client.status = status
+        await self.bridge.heartbeat()
+        self.assertNotEqual(self.bridge.phase, 'recording')
+        self.assertTrue(self.bridge.blocked_until_release)
 
     async def test_disconnect_discards_capture_and_queued_speech(self):
         await self.bridge.press(1)
