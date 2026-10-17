@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>小暖设置</title>
+<style>
+  :root {
+    --bg: #fbf7f2; --card: #ffffff; --ink: #2d2620; --muted: #8a7f75; --line: #ece4da;
+    --accent: #e07a5f; --ok: #3d9970; --warn: #d08c2c; --bad: #c4453b;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #1d1a17; --card: #27231f; --ink: #f1ebe4; --muted: #a3988d; --line: #3a342e; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink);
+         font: 15px/1.6 "Microsoft YaHei UI", "PingFang SC", system-ui, sans-serif; }
+  main { max-width: 680px; margin: 0 auto; padding: 32px 16px 64px; }
+  h1 { font-size: 24px; margin: 0 0 4px; }
+  .sub { color: var(--muted); margin: 0 0 24px; }
+  .step { background: var(--card); border: 1px solid var(--line); border-radius: 12px;
+          padding: 16px 18px; margin-bottom: 12px; }
+  .head { display: flex; align-items: center; gap: 10px; }
+  .head h2 { font-size: 16px; margin: 0; flex: 1; }
+  .pill { font-size: 13px; padding: 2px 10px; border-radius: 99px; color: #fff; background: var(--muted); white-space: nowrap; }
+  .pill.ok { background: var(--ok); } .pill.warn { background: var(--warn); } .pill.bad { background: var(--bad); }
+  .body { color: var(--muted); margin-top: 8px; font-size: 14px; }
+  .body b { color: var(--ink); font-weight: 600; }
+  .row { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+  input { flex: 1; min-width: 200px; padding: 9px 12px; border: 1px solid var(--line); border-radius: 8px;
+          background: var(--bg); color: var(--ink); font: inherit; }
+  button, a.btn { padding: 9px 16px; border: 0; border-radius: 8px; background: var(--accent); color: #fff;
+                  font: inherit; cursor: pointer; text-decoration: none; display: inline-block; }
+  button.ghost { background: transparent; color: var(--accent); border: 1px solid var(--accent); }
+  button:disabled { opacity: .5; cursor: default; }
+  .msg { margin-top: 8px; font-size: 14px; min-height: 1em; }
+  .msg.bad { color: var(--bad); } .msg.ok { color: var(--ok); }
+  pre { background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px;
+        font-size: 12px; white-space: pre-wrap; margin: 10px 0 0; color: var(--muted); }
+  .done { text-align: center; margin-top: 20px; }
+  .done a.btn { margin: 0 4px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>小暖设置</h1>
+  <p class="sub">按顺序把下面几项变成绿色，就可以和小暖说话了。这个页面会自动刷新状态。</p>
+
+  <section class="step">
+    <div class="head"><h2>① DeepSeek 密钥</h2><span class="pill" id="p-key">检查中</span></div>
+    <div class="body">小暖用它来思考和回复。密钥只保存在这台电脑：<b id="home"></b></div>
+    <div class="row">
+      <input id="key" type="password" placeholder="粘贴 sk- 开头的密钥" autocomplete="off">
+      <button id="save">保存并测试</button>
+    </div>
+    <div class="msg" id="m-key"></div>
+  </section>
+
+  <section class="step">
+    <div class="head"><h2>② 语音识别模型</h2><span class="pill" id="p-model">检查中</span></div>
+    <div class="body" id="b-model"></div>
+  </section>
+
+  <section class="step">
+    <div class="head"><h2>③ 移动热点</h2><span class="pill" id="p-hot">检查中</span></div>
+    <div class="body">板子连的是<b>这台电脑的移动热点</b>（电脑地址固定为 192.168.137.1）。
+      请打开热点，并在“编辑”里把<b>网络频带设为 2.4GHz</b>，热点名和密码要和烧录时填的一致。</div>
+    <div class="row"><button class="ghost" id="hot">打开热点设置</button></div>
+  </section>
+
+  <section class="step">
+    <div class="head"><h2>④ 防火墙放行 5000 端口</h2><span class="pill" id="p-fw">检查中</span></div>
+    <div class="body">点击后 Windows 会弹出管理员确认，选“是”。只放行同一局域网/热点里的设备。
+      第一次启动时如果弹出“Windows 安全中心”提示，也请点<b>允许访问</b>。</div>
+    <div class="row"><button class="ghost" id="fw">一键放行</button></div>
+    <div class="msg" id="m-fw"></div>
+  </section>
+
+  <section class="step">
+    <div class="head"><h2>⑤ 板子</h2><span class="pill" id="p-board">检查中</span></div>
+    <div class="body" id="b-board"></div>
+    <pre id="events" hidden></pre>
+  </section>
+
+  <div class="done">
+    <a class="btn" href="/">打开聊天</a>
+    <a class="btn" href="/world">打开 3D 世界</a>
+  </div>
+</main>
+<script>
+const $ = id => document.getElementById(id);
+function pill(id, cls, text) { const el = $(id); el.className = "pill " + cls; el.textContent = text; }
+
+async function post(url, body) {
+  const r = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" },
+                               body: body ? JSON.stringify(body) : undefined });
+  let data = {};
+  try { data = await r.json(); } catch {}
+  if (!r.ok) throw new Error(typeof data.detail === "string" ? data.detail : "操作失败（" + r.status + "）");
+  return data;
+}
+
+async function refresh() {
+  let s;
+  try { s = await (await fetch("/api/setup/status")).json(); }
+  catch { pill("p-board", "bad", "小暖没在运行"); return; }
+  $("home").textContent = s.home;
+  s.key_set ? pill("p-key", "ok", "已设置") : pill("p-key", "bad", "未设置");
+
+  if (s.models_ready) { pill("p-model", "ok", "已就绪"); $("b-model").textContent = "已内置在程序里，不需要下载。"; }
+  else { pill("p-model", "bad", "缺少"); $("b-model").innerHTML = "没找到识别模型。请确认解压出来的文件夹里有 <b>models</b> 文件夹，并且和 Xiaonuan.exe 放在一起。"; }
+
+  s.hotspot_on ? pill("p-hot", "ok", "已打开") : pill("p-hot", "warn", "没检测到");
+
+  if (s.firewall_rule === true) pill("p-fw", "ok", "已放行");
+  else if (s.firewall_rule === false) pill("p-fw", "warn", "未放行");
+  else pill("p-fw", "warn", "无法检查");
+
+  let text;
+  if (s.tcp_error) { pill("p-board", "bad", "端口被占用"); text = "TCP " + s.tcp_port + " 被别的程序占用：" + s.tcp_error; }
+  else if (s.board_ready && s.calibrated) { pill("p-board", "ok", "已连接"); text = "板子 " + s.board_addr + " 已连接并完成校准。按住压力传感器说话，松手听小暖回复。"; }
+  else if (s.board_ready || s.board_tcp) { pill("p-board", "warn", "校准中"); text = "板子 " + s.board_addr + " 已连上，正在校准：请先不要按压力传感器。"; }
+  else {
+    pill("p-board", "bad", "未连接");
+    text = !s.hotspot_on ? "先打开第 ③ 步的移动热点，再给板子通电。"
+         : s.firewall_rule === false ? "热点已开，请完成第 ④ 步放行防火墙。板子每 2 秒自动重连一次。"
+         : "等待板子连接…… 请给板子通电（插 USB 或充电宝），上电时不要按压力传感器。若热点“已连接的设备”里没有它，检查热点是否为 2.4GHz、名字和密码是否与烧录时一致。";
+  }
+  $("b-board").textContent = text;
+  $("events").hidden = !s.events.length;
+  $("events").textContent = s.events.join("\n");
+}
+
+$("save").onclick = async () => {
+  const key = $("key").value.trim();
+  if (!key) return;
+  $("save").disabled = true; $("m-key").className = "msg"; $("m-key").textContent = "正在测试……";
+  try { await post("/api/setup/key", { key }); $("m-key").className = "msg ok"; $("m-key").textContent = "密钥有效，已保存。"; $("key").value = ""; }
+  catch (e) { $("m-key").className = "msg bad"; $("m-key").textContent = e.message; }
+  $("save").disabled = false; refresh();
+};
+$("fw").onclick = async () => {
+  $("m-fw").className = "msg"; $("m-fw").textContent = "请在弹出的窗口里点“是”……";
+  try { await post("/api/setup/firewall"); setTimeout(refresh, 2500); $("m-fw").textContent = ""; }
+  catch (e) { $("m-fw").className = "msg bad"; $("m-fw").textContent = e.message; }
+};
+$("hot").onclick = () => post("/api/setup/open-hotspot").catch(() => {});
+refresh();
+setInterval(refresh, 2000);
+</script>
+</body>
+</html>
