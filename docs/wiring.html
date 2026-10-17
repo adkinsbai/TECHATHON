@@ -1,0 +1,546 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ESP32 x ES8311+NS4150B 接线图</title>
+<style>
+  :root{
+    --bg:#0e1116;
+    --surface:#161b23;
+    --surface-2:#1c222c;
+    --line:#2a323f;
+    --text:#e8edf5;
+    --text-dim:#93a0b4;
+    --i2c:#f59e0b;
+    --clk:#38bdf8;
+    --data:#f472b6;
+    --pwr:#ef4444;
+    --gnd:#94a3b8;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{
+    font-family:"Inter","PingFang SC","Microsoft YaHei","Hiragino Sans GB",sans-serif;
+    background:var(--bg);color:var(--text);
+    padding:28px 20px 64px;
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:1140px;margin:0 auto}
+  header{display:flex;flex-wrap:wrap;gap:16px;align-items:center;justify-content:space-between;margin-bottom:22px}
+  h1{font-size:19px;font-weight:600;letter-spacing:0}
+  h1 small{display:block;font-size:13px;font-weight:400;color:var(--text-dim);margin-top:5px;letter-spacing:0}
+  .tabs{display:flex;background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:3px;gap:3px}
+  .tabgroups{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+  .tab{
+    font:inherit;font-size:13px;color:var(--text-dim);background:none;border:0;border-radius:6px;
+    padding:8px 16px;cursor:pointer;transition:background .15s,color .15s;
+  }
+  .tab:hover{color:var(--text)}
+  .tab[aria-selected="true"]{background:var(--surface-2);color:var(--text);box-shadow:inset 0 0 0 1px var(--line)}
+
+  .diagram{
+    position:relative;background:var(--surface);border:1px solid var(--line);border-radius:10px;
+    padding:20px;display:grid;grid-template-columns:1fr 1fr;gap:clamp(56px,16vw,190px);overflow:hidden;
+  }
+  .board{display:flex;flex-direction:column;gap:4px;min-width:0}
+  .board-name{font-size:12px;color:var(--text-dim);letter-spacing:0;margin-bottom:8px;padding-left:2px}
+  .pin{
+    display:flex;align-items:center;gap:10px;height:38px;padding:0 10px;border-radius:6px;
+    background:var(--surface-2);border:1px solid var(--line);cursor:pointer;flex:0 0 auto;
+    transition:border-color .15s,background .15s;min-width:0;
+  }
+  .pin:hover{border-color:#3d4a5c}
+  .pin[data-active="1"]{border-color:#5b6b80;background:#222a35}
+  .pin-label{font-size:13px;font-weight:500;font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .pin-sub{font-size:11px;color:var(--text-dim);margin-left:auto;padding-left:8px;white-space:nowrap}
+  .left .pin{flex-direction:row-reverse}
+  .left .pin-label{text-align:right}
+  .left .pin-sub{margin-left:0;margin-right:auto;padding-left:0;padding-right:8px}
+  .dot{width:9px;height:9px;border-radius:50%;background:var(--dc,#4b5563);flex:0 0 auto;box-shadow:0 0 0 3px rgba(255,255,255,.04)}
+  svg.wires{position:absolute;inset:0;pointer-events:none}
+  svg.wires path{fill:none;stroke-linecap:round;stroke-width:2;opacity:.6;transition:opacity .15s,stroke-width .15s}
+  svg.wires path.sel{opacity:1;stroke-width:3}
+  svg.wires path.dim{opacity:.12}
+
+  .cards{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:14px}
+  .card{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:18px}
+  .card h2{font-size:13px;font-weight:600;color:var(--text-dim);letter-spacing:.02em;margin-bottom:14px;text-transform:uppercase}
+  .kv{display:grid;grid-template-columns:88px 1fr;gap:9px 14px;font-size:13.5px;align-items:baseline}
+  .kv dt{color:var(--text-dim)}
+  .kv dd{word-break:break-word}
+  code{font-family:"Cascadia Mono",Consolas,monospace;font-size:12.5px;background:#0a0d12;border:1px solid var(--line);border-radius:4px;padding:1px 6px;color:#c7d2e0}
+  .lede{font-size:13.5px;line-height:1.75;color:var(--text-dim)}
+  .lede b{color:var(--text);font-weight:600}
+  .flag{display:flex;gap:10px;align-items:flex-start;font-size:13.5px;line-height:1.7;padding:11px 0;border-top:1px solid var(--line)}
+  .flag:first-of-type{border-top:0;padding-top:0}
+  .flag .k{flex:0 0 62px;font-size:11.5px;color:var(--bg);background:var(--accent,#f59e0b);border-radius:4px;text-align:center;padding:3px 0;font-weight:600;margin-top:2px}
+
+  .tablewrap{margin-top:26px;background:var(--surface);border:1px solid var(--line);border-radius:10px;overflow:hidden}
+  .tablewrap h2{font-size:14px;font-weight:600;padding:16px 18px;border-bottom:1px solid var(--line)}
+  table{width:100%;border-collapse:collapse;font-size:13.5px}
+  th{text-align:left;font-weight:600;font-size:12px;color:var(--text-dim);background:var(--surface-2);padding:10px 18px;letter-spacing:.02em}
+  td{padding:11px 18px;border-top:1px solid var(--line);vertical-align:top}
+  td.mono{font-family:"Cascadia Mono",Consolas,monospace;font-size:12.5px;color:#c7d2e0;white-space:nowrap}
+  .swatch{display:inline-block;width:8px;height:8px;border-radius:2px;margin-right:8px;vertical-align:middle}
+
+  @media (max-width:880px){
+    table,tbody,tr,td{display:block;width:100%}
+    thead{display:none}
+    tr{padding:12px 0}
+    tr + tr{border-top:1px solid var(--line)}
+    td{border-top:0;padding:4px 18px;display:grid;grid-template-columns:74px 1fr;gap:10px;align-items:baseline}
+    td::before{content:attr(data-label);color:var(--text-dim);font-size:12px}
+    td.mono{white-space:normal;overflow-wrap:anywhere}
+  }
+
+  .check{display:flex;flex-wrap:wrap;gap:8px;margin-top:16px}
+  .check label{
+    display:flex;align-items:center;gap:8px;font-size:12.5px;background:var(--surface-2);
+    border:1px solid var(--line);border-radius:6px;padding:7px 12px;cursor:pointer;user-select:none;
+  }
+  .check input{accent-color:#38bdf8;width:14px;height:14px}
+  .check label:has(input:checked){color:var(--text-dim);text-decoration:line-through;opacity:.7}
+  .legend{display:flex;flex-wrap:wrap;gap:18px;margin-top:18px;font-size:12.5px;color:var(--text-dim)}
+  .legend span{display:flex;align-items:center;gap:7px}
+  .legend i{width:14px;height:3px;border-radius:2px;display:block}
+  .hint{font-size:12.5px;color:var(--text-dim);margin-top:10px}
+  @media (max-width:880px){
+    .diagram{grid-template-columns:1fr;gap:28px}
+    .cards{grid-template-columns:1fr}
+    .left .pin, .pin{flex-direction:row}
+    .left .pin-label{text-align:left}
+    .left .pin-sub{margin-left:auto;margin-right:0;padding-left:8px;padding-right:0}
+    svg.wires{display:none}
+    .pin{min-height:38px}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1 id="title"><span id="titleText">接线图</span>
+      <small id="subtitle"></small>
+    </h1>
+    <div class="tabgroups">
+      <div class="tabs" role="tablist">
+        <button class="tab" role="tab" data-device="codec" aria-selected="true">音频模块</button>
+        <button class="tab" role="tab" data-device="fsr" aria-selected="false">力传感器</button>
+        <button class="tab" role="tab" data-device="both" aria-selected="false">音箱+麦克风</button>
+        <button class="tab" role="tab" data-device="mic" aria-selected="false">麦克风（独立）</button>
+      </div>
+      <div class="tabs" role="tablist">
+        <button class="tab" role="tab" data-board="s3" aria-selected="true">ESP32-S3</button>
+        <button class="tab" role="tab" data-board="c3" aria-selected="false">ESP32-C3</button>
+      </div>
+    </div>
+  </header>
+
+  <div class="diagram" id="diagram">
+    <div class="board left" id="boardCol">
+      <div class="board-name" id="boardName">主控</div>
+    </div>
+    <div class="board right" id="moduleCol">
+      <div class="board-name" id="deviceName"></div>
+    </div>
+    <svg class="wires" id="wires"></svg>
+  </div>
+
+  <div class="legend" id="legend"></div>
+
+  <div class="cards">
+    <div class="card">
+      <h2>信号详情</h2>
+      <dl class="kv" id="detail"></dl>
+    </div>
+    <div class="card">
+      <h2>接线要点</h2>
+      <div id="flags"></div>
+    </div>
+  </div>
+
+  <div class="tablewrap">
+    <h2>完整接线表</h2>
+    <table>
+      <thead>
+        <tr><th>主控引脚</th><th>模块引脚</th><th>信号方向</th><th>用途</th><th>固件宏名</th></tr>
+      </thead>
+      <tbody id="tbody"></tbody>
+    </table>
+  </div>
+
+  <div class="card" style="margin-top:14px">
+    <h2>接线核对</h2>
+    <div class="check" id="check"></div>
+    <div class="hint" id="checkCount"></div>
+  </div>
+</div>
+
+<script>
+const COLOR = {i2c:"#f59e0b", clk:"#38bdf8", data:"#f472b6", pwr:"#ef4444", gnd:"#94a3b8"};
+const BOARD_NAME = {
+  s3:"ESP32-S3 开发板（N16R8，左排针自上而下）",
+  c3:"ESP32-C3 开发板（自上而下）"
+};
+
+const DEVICES = {
+  codec:{
+    title:"ESP32 × ES8311+NS4150B 接线图",
+    subtitle:"9 根线：7 根信号 + 5V + GND　·　模块排针丝印 SDA SCL MCLK SCLK DOUT LRCK DIN 5V GND",
+    name:"ES8311 + NS4150B 模块",
+    order:["SDA","SCL","MCLK","SCLK","DOUT","LRCK","DIN","5V","GND"],
+    sub:{
+      SDA:"I2C 数据", SCL:"I2C 时钟", MCLK:"主时钟", SCLK:"位时钟 BCLK", DOUT:"模块数据输出",
+      LRCK:"帧时钟 WS", DIN:"模块数据输入", "5V":"功放供电", GND:"接地"
+    },
+    legend:[["#f59e0b","I2C 配置总线"],["#38bdf8","I2S 时钟"],["#f472b6","I2S 音频数据"],["#ef4444","5V"],["#94a3b8","GND"]],
+    flags:[
+      ["data","方向","主控的 I2S 数据输出脚接模块的 <b>DIN</b>，模块的 <b>DOUT</b> 接主控的 I2S 数据输入脚。两个名字是反的，接错的表现是喇叭出声但麦克风没声，或反过来。"],
+      ["pwr","5V","NS4150B 功放要 5V。ESP32-S3 板的 5V-IN 默认不对外供电，需要短接板上的 IN-OUT 焊盘；C3 板的 5V 脚与 USB VBUS 直连，可直接取。"],
+      ["clk","MCLK","ES8311 依赖主控提供的主时钟。没输出 MCLK 时 Codec 初始化会失败，I2C 通信也可能异常。"],
+      ["i2c","线长","SDA / SCL 走板级短距离，建议不超过 5 cm，并远离天线模块等干扰源。"]
+    ],
+    summary:[["接线数","9 根（7 信号 + 5V + GND）"],["模块地址","<code>ES8311 @ 0x18</code>"],["喇叭","接模块 SPK 座，功放 CTRL 默认常开"]],
+    boards:{
+      s3:{
+        header:["GPIO4","GPIO5","GPIO6","GPIO11","GPIO12","GPIO13","GPIO14","5V0","GND"],
+        note:{"5V0":"需短接 IN-OUT 焊盘"},
+        wires:[
+          ["GPIO5","SDA","i2c","双向","I2C 数据，配置 ES8311 寄存器（地址 0x18）","AUDIO_CODEC_I2C_SDA_PIN"],
+          ["GPIO4","SCL","i2c","主控 &#8594; 模块","I2C 时钟","AUDIO_CODEC_I2C_SCL_PIN"],
+          ["GPIO6","MCLK","clk","主控 &#8594; 模块","主时钟，必须由主控输出","AUDIO_I2S_GPIO_MCLK"],
+          ["GPIO14","SCLK","clk","主控 &#8594; 模块","I2S 位时钟 BCLK","AUDIO_I2S_GPIO_BCLK"],
+          ["GPIO11","DIN","data","主控 &#8594; 模块","播放数据（喇叭出声）","AUDIO_I2S_GPIO_DOUT"],
+          ["GPIO12","LRCK","clk","主控 &#8594; 模块","帧时钟 WS，默认单声道","AUDIO_I2S_GPIO_WS"],
+          ["GPIO13","DOUT","data","模块 &#8594; 主控","录音数据（麦克风）","AUDIO_I2S_GPIO_DIN"],
+          ["5V0","5V","pwr","电源","给 NS4150B 功放供电","&#8212;"],
+          ["GND","GND","gnd","电源","共地","&#8212;"]
+        ]
+      },
+      c3:{
+        header:["GPIO3","GPIO4","GPIO5","GPIO6","GPIO7","GPIO8","GPIO10","5V","GND"],
+        note:{"GPIO8":"官方板此脚为板载 RGB"},
+        wires:[
+          ["GPIO3","SDA","i2c","双向","I2C 数据，配置 ES8311 寄存器（地址 0x18）","AUDIO_CODEC_I2C_SDA_PIN"],
+          ["GPIO4","SCL","i2c","主控 &#8594; 模块","I2C 时钟","AUDIO_CODEC_I2C_SCL_PIN"],
+          ["GPIO10","MCLK","clk","主控 &#8594; 模块","主时钟，必须由主控输出","AUDIO_I2S_GPIO_MCLK"],
+          ["GPIO8","SCLK","clk","主控 &#8594; 模块","I2S 位时钟 BCLK","AUDIO_I2S_GPIO_BCLK"],
+          ["GPIO5","DIN","data","主控 &#8594; 模块","播放数据（喇叭出声）","AUDIO_I2S_GPIO_DOUT"],
+          ["GPIO6","LRCK","clk","主控 &#8594; 模块","帧时钟 WS，默认单声道","AUDIO_I2S_GPIO_WS"],
+          ["GPIO7","DOUT","data","模块 &#8594; 主控","录音数据（麦克风）","AUDIO_I2S_GPIO_DIN"],
+          ["5V","5V","pwr","电源","给 NS4150B 功放供电","&#8212;"],
+          ["GND","GND","gnd","电源","共地","&#8212;"]
+        ]
+      }
+    }
+  },
+  both:{
+    title:"ESP32 × 音箱 + 麦克风 接线图（本项目）",
+    subtitle:"音箱 7 根 + 麦克风 3 根，其中 2 根时钟线并联　·　共 10 根　·　麦克风只能 3.3V　·　音频双向都走 WiFi",
+    name:"ES8311+NS4150B 音箱模块 + INMP441 麦克风",
+    order:["SDA","SCL","MCLK","SCLK / SCK","DIN","LRCK / WS","SD","DOUT（悬空）","5V / VDD","GND","L/R"],
+    sub:{
+      SDA:"I2C 数据", SCL:"I2C 时钟", MCLK:"主时钟", "SCLK / SCK":"位时钟，两模块共用",
+      DIN:"音箱数据输入", "LRCK / WS":"帧时钟，两模块共用", SD:"麦克风数据输出",
+      "DOUT（悬空）":"本项目不接这根", "5V / VDD":"音箱 5V + 麦克风 VDD", GND:"共地", "L/R":"声道选择，必须接 GND"
+    },
+    legend:[["#f59e0b","I2C 配置总线"],["#38bdf8","I2S 时钟（并联）"],["#f472b6","I2S 音频数据"],["#ef4444","3.3V"],["#94a3b8","GND"]],
+    flags:[
+      ["clk","共用一条 I2S 总线","音箱的 SCLK / LRCK 和麦克风的 SCK / WS 是同一对时钟线 —— GPIO14 和 GPIO12 各分一个叉出去即可。省引脚，而且不用牺牲 ES8311 的 MCLK（两路 I2S 都已经名花有主，见文档第 5 节）。"],
+      ["data","一根线只能有一个来源","麦克风的 SD 接 GPIO13，所以音箱模块的 DOUT 就不要再接：本项目不用它自带的麦克风。两个输出脚并到一根线上会互相打架，表现为录音全是噪声或时好时坏。"],
+      ["pwr","麦克风只吃 3.3V","INMP441 供电范围 1.8–3.3V，接 5V 会直接烧芯片。音箱模块的 5V 脚接 3.3V 可以用（NS4150B 最低 3.0V，已实测出声）。"],
+      ["pwr","只有杜邦线怎么共接","板子上 <b>GND 有 4 个、3V3 有 2 个</b>，所以只有 GPIO14 / GPIO12 需要一分为二。三种做法：面包板同一排 / 一拖二（Y 型）杜邦线 / 三根线绞在一起（分叉点 ≤5cm，时钟线虚接会偶尔「啪」一下）。地线和电源各占一个脚，不用分。"],
+      ["i2c","半双工","MicroPython 里一路 I2S 不能同时收 + 发：录音时不放音、放音时不录音。本项目流程是「先听你说 → 电脑处理 → 再出声」，半双工正好够用。"],
+      ["i2c","线长","SDA / SCL 走板级短距离，不超过 5cm；I2S 时钟线也尽量短，并远离天线区域。"]
+    ],
+    summary:[["接线数","10 根（含 2 根时钟并联）"],["音箱","<code>ES8311 @ 0x18</code> + NS4150B"],["麦克风","INMP441，24 位 I2S"],["数据链路","双向都走 WiFi，USB 只管供电/烧录/兜底"]],
+    boards:{
+      s3:{
+        header:["GPIO4","GPIO5","GPIO6","GPIO11","GPIO12","GPIO13","GPIO14","3V3","GND"],
+        note:{"3V3":"音箱 5V 脚也接这里"},
+        wires:[
+          ["GPIO5","SDA","i2c","双向","I2C 数据，配置 ES8311（地址 0x18）","AUDIO_CODEC_I2C_SDA_PIN"],
+          ["GPIO4","SCL","i2c","主控 &#8594; 模块","I2C 时钟","AUDIO_CODEC_I2C_SCL_PIN"],
+          ["GPIO6","MCLK","clk","主控 &#8594; 音箱","ES8311 主时钟 6.144MHz，由 I2S1 生成","AUDIO_I2S_GPIO_MCLK"],
+          ["GPIO14","SCLK / SCK","clk","主控 &#8594; 两个模块","一路 BCLK 并联给音箱和麦克风","AUDIO_I2S_GPIO_BCLK"],
+          ["GPIO11","DIN","data","主控 &#8594; 音箱","播放数据（喇叭出声）","AUDIO_I2S_GPIO_DOUT"],
+          ["GPIO12","LRCK / WS","clk","主控 &#8594; 两个模块","帧时钟，音箱和麦克风并联","AUDIO_I2S_GPIO_WS"],
+          ["GPIO13","SD","data","麦克风 &#8594; 主控","麦克风采集数据（原音箱 DOUT 那根线）","AUDIO_I2S_GPIO_DIN"],
+          ["3V3","5V / VDD","pwr","电源","音箱 5V 脚接 3.3V；麦克风 VDD 只能 3.3V","&#8212;"],
+          ["GND","GND","gnd","电源","共地：板子 / 音箱 / 麦克风","&#8212;"],
+          ["GND","L/R","gnd","接地","固定左声道；悬空则采到的数据全是 0","&#8212;"]
+        ]
+      },
+      c3:{
+        header:["GPIO3","GPIO4","GPIO5","GPIO6","GPIO7","GPIO8","GPIO10","3V3","GND"],
+        note:{"GPIO8":"官方板此脚为板载 RGB"},
+        wires:[
+          ["GPIO3","SDA","i2c","双向","I2C 数据，配置 ES8311（地址 0x18）","AUDIO_CODEC_I2C_SDA_PIN"],
+          ["GPIO4","SCL","i2c","主控 &#8594; 模块","I2C 时钟","AUDIO_CODEC_I2C_SCL_PIN"],
+          ["GPIO10","MCLK","clk","主控 &#8594; 音箱","ES8311 主时钟，必须由主控输出","AUDIO_I2S_GPIO_MCLK"],
+          ["GPIO8","SCLK / SCK","clk","主控 &#8594; 两个模块","一路 BCLK 并联给音箱和麦克风","AUDIO_I2S_GPIO_BCLK"],
+          ["GPIO5","DIN","data","主控 &#8594; 音箱","播放数据（喇叭出声）","AUDIO_I2S_GPIO_DOUT"],
+          ["GPIO6","LRCK / WS","clk","主控 &#8594; 两个模块","帧时钟，音箱和麦克风并联","AUDIO_I2S_GPIO_WS"],
+          ["GPIO7","SD","data","麦克风 &#8594; 主控","麦克风采集数据（原音箱 DOUT 那根线）","AUDIO_I2S_GPIO_DIN"],
+          ["3V3","5V / VDD","pwr","电源","音箱 5V 脚接 3.3V；麦克风 VDD 只能 3.3V","&#8212;"],
+          ["GND","GND","gnd","电源","共地：板子 / 音箱 / 麦克风","&#8212;"],
+          ["GND","L/R","gnd","接地","固定左声道；悬空则采到的数据全是 0","&#8212;"]
+        ]
+      }
+    }
+  },
+  mic:{
+    title:"ESP32 × INMP441 麦克风接线图（独立使用，本项目不这样接）",
+    subtitle:"6 根线：SCK WS L/R SD VDD GND　·　不需要 MCLK　·　只能 3.3V 供电",
+    name:"INMP441 全向麦克风模块",
+    order:["SCK","WS","L/R","SD","VDD","GND"],
+    sub:{
+      SCK:"I2S 位时钟", WS:"帧同步", "L/R":"声道选择", SD:"麦克风数据输出", VDD:"供电 3.3V", GND:"接地"
+    },
+    legend:[["#38bdf8","I2S 时钟"],["#f472b6","I2S 音频数据"],["#ef4444","3.3V"],["#94a3b8","GND"]],
+    flags:[
+      ["clk","本项目不要这样接","这一页是「只接麦克风、不接音箱」的独立接法（麦克风单独占一路 I2S）。本项目音箱和麦克风要同时用，请切到上面的 <b>音箱+麦克风</b> 页：那里的麦克风是并到音箱那条 I2S 总线上的。"],
+      ["data","L/R","这个脚必须明确接 GND（左声道）或 3.3V（右声道）。悬空会让芯片进入节能模式，采到的数据全是 0，这是厂商 FAQ 里排第一的坑。"],
+      ["pwr","3.3V","INMP441 供电范围 1.8–3.3V，接 5V 会直接烧毁芯片。VDD 接 3.3V，别接模块的 5V 脚。"],
+      ["clk","MCLK","不需要主时钟。INMP441 内部 PLL 从 SCK 恢复时钟，所以比 ES8311 少一根 MCLK 线。"],
+      ["i2c","位深","24 位 I2S、飞利浦标准（CPOL=0 / CPHA=1），采样率 8k–48k。单声道固定 L/R 接地，代码读左声道。"]
+    ],
+    summary:[["接线数","6 根（SCK / WS / L-R / SD / VDD / GND）"],["供电","只能 3.3V"],["位深","24 位 I2S，飞利浦标准"],["位号","以丝印为准，别按位置猜"]],
+    boards:{
+      s3:{
+        header:["GPIO15","GPIO16","GPIO17","3V3","GND"],
+        note:{"GPIO17":"默认是 UART1 TX","3V3":"板载 3.3V 输出"},
+        wires:[
+          ["GPIO15","SCK","clk","主控 &#8594; 模块","I2S 位时钟","AUDIO_I2S_MIC_GPIO_SCK"],
+          ["GPIO16","WS","clk","主控 &#8594; 模块","帧同步（字选择）","AUDIO_I2S_MIC_GPIO_WS"],
+          ["GPIO17","SD","data","模块 &#8594; 主控","麦克风采集数据输出","AUDIO_I2S_MIC_GPIO_DIN"],
+          ["GND","L/R","gnd","接地","固定左声道；悬空会输出全 0","&#8212;"],
+          ["3V3","VDD","pwr","电源","只能 3.3V，接 5V 会烧芯片","&#8212;"],
+          ["GND","GND","gnd","电源","共地","&#8212;"]
+        ]
+      },
+      c3:{
+        header:["GPIO0","GPIO1","GPIO2","3V3","GND"],
+        note:{"GPIO2":"启动配置脚，慎用"},
+        wires:[
+          ["GPIO0","SCK","clk","主控 &#8594; 模块","I2S 位时钟","AUDIO_I2S_MIC_GPIO_SCK"],
+          ["GPIO1","WS","clk","主控 &#8594; 模块","帧同步（字选择）","AUDIO_I2S_MIC_GPIO_WS"],
+          ["GPIO2","SD","data","模块 &#8594; 主控","麦克风采集数据输出","AUDIO_I2S_MIC_GPIO_DIN"],
+          ["GND","L/R","gnd","接地","固定左声道；悬空会输出全 0","&#8212;"],
+          ["3V3","VDD","pwr","电源","只能 3.3V，接 5V 会烧芯片","&#8212;"],
+          ["GND","GND","gnd","电源","共地","&#8212;"]
+        ]
+      }
+    }
+  },
+  fsr:{
+    title:"ESP32 × 力传感器（FSR）接线图",
+    subtitle:"3 根线：G / V / S　·　S 接 GPIO8（ADC1_CH7）　·　A/D 跳线放 A 侧读力度",
+    name:"薄膜压力传感器模块（FSR）",
+    order:["S","V","G"],
+    sub:{S:"模拟信号输出", V:"供电 3.3V", G:"电源地"},
+    legend:[["#f472b6","模拟信号"],["#ef4444","3.3V"],["#94a3b8","GND"]],
+    flags:[
+      ["data","A/D 跳线放 A","放 A 侧读模拟量（电压随力度连续变化）；放 D 侧只有「按下 / 松开」两档，读不出力度。"],
+      ["pwr","只能 3.3V","模块用 5V 供电时信号可能超过 3.3V，会打坏 ADC。红 V 接 3V3。"],
+      ["i2c","为什么是 GPIO8","GPIO8 = ADC1_CH7，属于 ADC1，可以和 WiFi 同时工作（ADC2 不行）；也不和音频模块的 I2C / I2S 冲突。"],
+      ["data","读数方向","这块模块空载时输出接近 3.3V（raw≈4095），按压后电压下降；压力越大越低。"],
+    ],
+    summary:[["接线数","3 根（G / V / S）"],["通道","ADC1_CH7（GPIO8）"],["量程","0–4095（ATTN_11DB）"],["上报","经 WiFi 发到电脑，10 次/秒"]],
+    boards:{
+      s3:{
+        header:["GPIO8","3V3","GND"],
+        note:{"GPIO8":"ADC1_CH7"},
+        wires:[
+          ["GPIO8","S","data","模块 &#8594; 主控","模拟电压，按压时下降","&#8212;"],
+          ["3V3","V","pwr","电源","只接 3.3V，不要接 5V","&#8212;"],
+          ["GND","G","gnd","电源","共地","&#8212;"]
+        ]
+      },
+      c3:{
+        header:["GPIO2","3V3","GND"],
+        note:{"GPIO2":"ADC1_CH2，启动脚慎用"},
+        wires:[
+          ["GPIO2","S","data","模块 &#8594; 主控","C3 上可用的 ADC1 通道","&#8212;"],
+          ["3V3","V","pwr","电源","只接 3.3V","&#8212;"],
+          ["GND","G","gnd","电源","共地","&#8212;"]
+        ]
+      }
+    }
+  }
+};
+
+let device = "codec";
+let board = "s3";
+let selected = null;
+let pinEls = {};
+
+const boardCol = document.getElementById("boardCol");
+const moduleCol = document.getElementById("moduleCol");
+const boardName = document.getElementById("boardName");
+const deviceName = document.getElementById("deviceName");
+const svg = document.getElementById("wires");
+const detail = document.getElementById("detail");
+const tbody = document.getElementById("tbody");
+const checkWrap = document.getElementById("check");
+const checkCount = document.getElementById("checkCount");
+const diagram = document.getElementById("diagram");
+const titleText = document.getElementById("titleText");
+const subtitleEl = document.getElementById("subtitle");
+const legendEl = document.getElementById("legend");
+const flagsEl = document.getElementById("flags");
+
+const cfg = () => DEVICES[device].boards[board];
+
+function build(){
+  const info = DEVICES[device];
+  const c = cfg();
+  titleText.textContent = info.title;
+  subtitleEl.textContent = info.subtitle;
+  deviceName.textContent = info.name;
+  boardName.textContent = BOARD_NAME[board];
+  legendEl.innerHTML = info.legend.map(([col, label]) =>
+    '<span><i style="background:' + col + '"></i>' + label + '</span>').join("");
+  flagsEl.innerHTML = info.flags.map(([kind, label, text]) =>
+    '<div class="flag" style="--accent:var(' + '--' + kind + ')"><span class="k">' + label + '</span><div>' + text + '</div></div>').join("");
+
+  boardCol.querySelectorAll(".pin").forEach(el => el.remove());
+  moduleCol.querySelectorAll(".pin").forEach(el => el.remove());
+  pinEls = {};
+
+  const kindOf = {};
+  c.wires.forEach(([b, m, kind]) => { kindOf[b] = kind; kindOf["mod:" + m] = kind; });
+
+  c.header.forEach(name => {
+    const el = document.createElement("div");
+    el.className = "pin";
+    el.dataset.key = "b:" + name;
+    el.dataset.color = COLOR[kindOf[name]] || "var(--gnd)";
+    el.innerHTML = '<span class="dot" style="--dc:' + (COLOR[kindOf[name]] || "#4b5563") + '"></span>'
+      + '<span class="pin-label">' + name + '</span>'
+      + (c.note[name] ? '<span class="pin-sub">' + c.note[name] + '</span>' : "");
+    boardCol.appendChild(el);
+    pinEls["b:" + name] = el;
+  });
+
+  info.order.forEach(name => {
+    const el = document.createElement("div");
+    el.className = "pin";
+    el.dataset.key = "m:" + name;
+    el.dataset.color = COLOR[kindOf["mod:" + name]] || "var(--gnd)";
+    el.innerHTML = '<span class="dot" style="--dc:' + (COLOR[kindOf["mod:" + name]] || "#4b5563") + '"></span>'
+      + '<span class="pin-label">' + name + '</span>'
+      + '<span class="pin-sub">' + info.sub[name] + '</span>';
+    moduleCol.appendChild(el);
+    pinEls["m:" + name] = el;
+  });
+
+  renderTable(c);
+  renderCheck(c);
+  requestAnimationFrame(draw);
+}
+
+function renderTable(cfg){
+  tbody.innerHTML = cfg.wires.map(([b, m, kind, dir, use, macro]) =>
+    '<tr data-wire="' + b + '|' + m + '">'
+    + '<td class="mono" data-label="主控引脚"><span class="cell"><span class="swatch" style="background:' + COLOR[kind] + '"></span>' + b + '</span></td>'
+    + '<td class="mono" data-label="模块引脚"><span class="cell">' + m + '</span></td>'
+    + '<td data-label="信号方向"><span class="cell">' + dir + '</span></td>'
+    + '<td data-label="用途"><span class="cell">' + use + '</span></td>'
+    + '<td class="mono" data-label="固件宏名"><span class="cell">' + macro + '</span></td>'
+    + '</tr>').join("");
+  tbody.querySelectorAll("tr").forEach(tr => {
+    tr.addEventListener("mouseenter", () => select(tr.dataset.wire));
+    tr.addEventListener("mouseleave", () => select(null));
+  });
+}
+
+function renderCheck(cfg){
+  checkWrap.innerHTML = cfg.wires.map(([b, m], i) =>
+    '<label><input type="checkbox" data-i="' + i + '">' + b + ' &#8594; ' + m + '</label>').join("");
+  const update = () => {
+    const boxes = [...checkWrap.querySelectorAll("input")];
+    checkCount.textContent = boxes.filter(b => b.checked).length + " / " + boxes.length + " 条已核对";
+  };
+  checkWrap.querySelectorAll("input").forEach(b => b.addEventListener("change", update));
+  update();
+}
+
+function draw(){
+  const box = diagram.getBoundingClientRect();
+  svg.setAttribute("viewBox", "0 0 " + box.width + " " + box.height);
+  svg.setAttribute("width", box.width);
+  svg.setAttribute("height", box.height);
+  svg.innerHTML = "";
+
+  cfg().wires.forEach(([b, m, kind]) => {
+    const left = pinEls["b:" + b], right = pinEls["m:" + m];
+    if(!left || !right) return;
+    const a = left.querySelector(".dot").getBoundingClientRect();
+    const c = right.querySelector(".dot").getBoundingClientRect();
+    const x1 = a.left + a.width / 2 - box.left, y1 = a.top + a.height / 2 - box.top;
+    const x2 = c.left + c.width / 2 - box.left, y2 = c.top + c.height / 2 - box.top;
+    const dx = Math.max(28, (x2 - x1) * 0.45);
+    const p = document.createElementNS("http://www.w3.org/2000/svg", "path");
+    p.setAttribute("d", "M" + x1 + "," + y1 + " C" + (x1 + dx) + "," + y1 + " " + (x2 - dx) + "," + y2 + " " + x2 + "," + y2);
+    p.setAttribute("stroke", COLOR[kind]);
+    p.dataset.wire = b + "|" + m;
+    svg.appendChild(p);
+  });
+  applyHighlight();
+}
+
+function applyHighlight(){
+  [...svg.querySelectorAll("path")].forEach(p => {
+    p.classList.toggle("sel", selected !== null && p.dataset.wire === selected);
+    p.classList.toggle("dim", selected !== null && p.dataset.wire !== selected);
+  });
+  Object.values(pinEls).forEach(el => { el.dataset.active = "0"; });
+  if(selected){
+    const w = cfg().wires.find(x => x[0] + "|" + x[1] === selected);
+    if(w){
+      if(pinEls["b:" + w[0]]) pinEls["b:" + w[0]].dataset.active = "1";
+      if(pinEls["m:" + w[1]]) pinEls["m:" + w[1]].dataset.active = "1";
+      detail.innerHTML =
+        "<dt>主控引脚</dt><dd><code>" + w[0] + "</code></dd>"
+        + "<dt>模块引脚</dt><dd><code>" + w[1] + "</code></dd>"
+        + "<dt>信号方向</dt><dd>" + w[3] + "</dd>"
+        + "<dt>用途</dt><dd>" + w[4] + "</dd>"
+        + "<dt>固件宏名</dt><dd><code>" + w[5] + "</code></dd>";
+    }
+  } else {
+    detail.innerHTML = "<dt>板子</dt><dd>" + BOARD_NAME[board] + "</dd>"
+      + DEVICES[device].summary.map(([k, v]) => "<dt>" + k + "</dt><dd>" + v + "</dd>").join("");
+  }
+}
+
+function select(key){
+  selected = key;
+  applyHighlight();
+}
+
+document.querySelectorAll(".tab").forEach(tab => {
+  const key = tab.dataset.device ? "device" : "board";
+  tab.addEventListener("click", () => {
+    tab.closest(".tabs").querySelectorAll(".tab").forEach(t => t.setAttribute("aria-selected", "false"));
+    tab.setAttribute("aria-selected", "true");
+    if(key === "device"){ device = tab.dataset.device; } else { board = tab.dataset.board; }
+    selected = null;
+    build();
+  });
+});
+
+diagram.addEventListener("click", e => {
+  const pin = e.target.closest(".pin");
+  if(!pin){ select(null); return; }
+  const [side, name] = pin.dataset.key.split(":");
+  const w = side === "b" ? cfg().wires.find(x => x[0] === name) : cfg().wires.find(x => x[1] === name);
+  if(!w){ select(null); return; }
+  const id = w[0] + "|" + w[1];
+  select(selected === id ? null : id);
+});
+
+window.addEventListener("resize", () => requestAnimationFrame(draw));
+build();
+</script>
+</body>
+</html>

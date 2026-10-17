@@ -1,0 +1,9 @@
+{
+  "_说明": "ssid/password 填板子要连的 2.4GHz WiFi；host 填运行 wifi_demo.py 那台电脑的局域网 IP（ipconfig 查看）。填好后运行 python install_wifi.py",
+  "ssid": "你的WiFi名字",
+  "password": "你的WiFi密码",
+  "host": "192.168.1.100",
+  "port": 5000,
+  "rate": 24000,
+  "reconnect_ms": 2000
+}
