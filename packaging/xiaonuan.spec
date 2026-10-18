@@ -8,6 +8,7 @@ COMPANION = os.path.join(REPO, 'companion')
 datas = [
     (os.path.join(COMPANION, 'static'), 'static'),
     (os.path.join(COMPANION, 'app', 'default_persona.json'), 'app'),
+    (os.path.join(COMPANION, 'demos'), 'demos'),   # 自带的对话生成世界示例（只读）
     (os.path.join(REPO, 'xiaonuan_app', 'static'), os.path.join('xiaonuan_app', 'static')),
 ]
 binaries = []

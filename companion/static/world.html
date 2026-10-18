@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>梦幻星球</title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/lxgw-wenkai-screen-webfont@1.7.0/style.css">
-<link rel="stylesheet" href="/static/world.css?v=13">
+<link rel="stylesheet" href="/static/world.css?v=14">
 <!-- BEGIN XIAONUAN BODY VIEW -->
 <link rel="stylesheet" href="/static/body-client.css">
 <script src="/static/body-client.js" defer></script>
@@ -24,6 +24,11 @@
     <button class="btn" id="enterBtn" disabled>正在生成星球…</button>
     <button class="btn ghost" id="externalPlay" type="button" style="margin-top:10px">在独立浏览器游玩 ↗</button>
     <p id="externalMessage" style="font-size:12px;margin-top:10px">在 Codex 预览里可用屏幕按钮；WASD 游玩请选择独立浏览器。</p>
+    <section class="dialog-worlds" id="dialogWorlds" hidden>
+      <h2>由对话生成的世界</h2>
+      <div class="dw-list"></div>
+      <a class="back" href="/world-studio">用你自己的对话生成新世界 →</a>
+    </section>
     <ul class="keys">
       <li><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> 行走</li>
       <li><kbd>鼠标</kbd> 看四周 · 内嵌窗口按住画面拖动</li>
@@ -75,6 +80,6 @@
 </div>
 
 <script type="importmap">{ "imports": { "three": "/static/vendor/three.module.min.js" } }</script>
-<script type="module" src="/static/world.js?v=24"></script>
+<script type="module" src="/static/world.js?v=25"></script>
 </body>
 </html>
