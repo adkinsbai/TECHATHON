@@ -1,6 +1,10 @@
 import * as THREE from 'three';
 import {GLTFLoader} from '/static/vendor/GLTFLoader.js';
 import {textSprite} from '/static/worldgen.js?v=2';
+import {toonify, contactShadow} from '/static/toonify.js?v=2';
+
+// 默认按绘本卡通风格处理生成的模型；地址加 ?style=pbr 可看原始写实材质做对比。
+const TOON_ON = new URLSearchParams(location.search).get('style') !== 'pbr';
 
 // Asset normalization and scene instances are separate. Parent-relative meters
 // (e.g. a parrot on a tree) never inherit the imported file's arbitrary units.
@@ -23,6 +27,7 @@ export async function mountGeneratedScene({scene, job, heightAt, colliders}) {
       source.position.sub(new THREE.Vector3(center.x,box.min.y,center.z));
       normalized.add(source);normalized.scale.setScalar(asset.height_m/size.y);
       source.traverse(o=>{if(o.isMesh){o.castShadow=o.receiveShadow=true;}});
+      if(TOON_ON)toonify(normalized,{heightM:asset.height_m,tintHex:job.recipe?.palette?.accent});
       templates.set(asset.id,normalized);loaded++;
       panel.textContent=`已导入 ${loaded}/${job.plan.assets.length} 类资产`;
     }catch(e){errors.push(asset.name+'：加载失败');console.error('Scene asset failed',asset.id,e);}
@@ -40,6 +45,10 @@ export async function mountGeneratedScene({scene, job, heightAt, colliders}) {
     if(template)root.add(template.clone(true));
     else{const label=textSprite(definition.name+' · 待制作');label.position.y=2;root.add(label);}
     root.userData.base=root.position.clone();root.userData.definition=definition;
+    if(!node.parent_id&&TOON_ON){
+      const r=Math.min(4,Math.max(.3,definition.collision_radius_m*1.4,definition.height_m*.25));
+      root.add(contactShadow(r/Math.max(.01,node.scale)));
+    }
     if(!node.parent_id&&definition.collision_radius_m>0){
       const collider={x:root.position.x,z:root.position.z,r:definition.collision_radius_m*node.scale};colliders.push(collider);root.userData.collider=collider;
     }

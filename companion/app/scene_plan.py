@@ -137,8 +137,11 @@ Use 18-28 tree instances and exactly two tiger instances. The parrot must be par
 with a perched_on relation. The two tigers need a fighting relation; keep that action OUT of the neutral
 single-tiger image_prompt so one model can be reused. No injury or blood required by the input.
 Every asset has source_quotes = zero-based indices of its supporting quotes.
-Image prompts: one complete isolated subject, naturalistic premium game art, detailed PBR materials,
-neutral readable pose, even light, pale plain background, no scenery/text/base or multi-view collage.
+Art direction (use it in style and every image_prompt): cozy storybook cartoon that matches a dreamy toon world,
+soft rounded simplified shapes, large clean color areas, gentle warm pastel palette, little fine surface detail,
+friendly readable proportions while each species stays clearly recognizable.
+Image prompts: one complete isolated subject in that style, neutral readable pose, even light,
+pale plain background, no scenery/text/base or multi-view collage.
 Never put relationships or other assets in image_prompt: tree images must contain ONLY the tree,
 no birds at all. A bird on a tree is assembled from two assets by the scene graph.
 Use the same style and proportional anatomy for all assets. No humanized/plush animals unless requested.
@@ -182,8 +185,9 @@ def world_recipe(plan):
     """Reuse existing world movement/terrain without writing a fake chat/world DB row."""
     return {'title': plan.title, 'intro': plan.summary, 'inspiration': '来自你和噜噜的动物园对话',
             'time': 'day', 'suns': 1, 'moons': 0, 'terrain': 'meadow', 'water': 'none',
-            'palette': {'sky_top': '#6099bc', 'sky_mid': '#b7d9dc', 'horizon': '#f7e9ce',
-                        'ground_a': '#a9ba76', 'ground_b': '#658958', 'accent': '#bf7849'},
+            # 绘本卡通的暖午后配色，和梦幻世界、噜噜一致；生成模型的卡通化也会向 accent 轻微靠拢。
+            'palette': {'sky_top': '#7fb2e5', 'sky_mid': '#bfe0f2', 'horizon': '#ffe9cf',
+                        'ground_a': '#b5dc8a', 'ground_b': '#78b46a', 'accent': '#f0a35e'},
             'flora': {'type': 'round_trees', 'density': 0, 'colors': ['#547845']},
             'weather': 'clear', 'landmarks': [],
             'quest': {'goal': '一起逛逛你记忆中的动物园', 'item': '回忆', 'item_shape': 'feather',

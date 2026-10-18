@@ -454,7 +454,10 @@ const cloudGroup = new THREE.Group();
 scene.add(cloudGroup);
 {
   const white = new THREE.Color("#ffffff");
-  const COLORS = GEN
+  // 对话生成的场景（世界工作室）：云只取天空色并更白，避免主色/植物色把云染成橙绿色。
+  const COLORS = BOOT.scene
+    ? [PAL.horizon, PAL.sky_mid, "#ffffff"].map((c) => "#" + new THREE.Color(c).lerp(white, 0.6).getHexString())
+    : GEN
     ? [PAL.horizon, PAL.sky_mid, PAL.accent, ...R.flora.colors].map((c) => "#" + new THREE.Color(c).lerp(white, 0.45).getHexString())
     : ["#ffc4dd", "#ffd9b3", "#d6c4ff", "#bfe9ff", "#c8f7d4", "#fff1b8", "#ffb8c9"];
   const geo = new THREE.IcosahedronGeometry(1, 1);
