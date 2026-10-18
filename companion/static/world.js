@@ -3,6 +3,9 @@ import * as THREE from "three";
 import { createSpace } from "/static/space.js?v=1";
 import * as WG from "/static/worldgen.js?v=2";
 import { loadCharacter, CHARACTER } from "/static/character.js?v=2";
+import { mountGeneratedScene } from '/static/scene-assets.js?v=4';
+import { createSite } from '/static/site.js?v=2';
+import { inputCode } from '/static/world-input.js';
 
 // 伙伴的 3D 模型（噜噜）；加载失败就退回程序画的小猫
 const CHAR_H = 1.9;
@@ -10,6 +13,8 @@ const CHAR_MODEL = await loadCharacter(CHAR_H).catch((e) => { console.warn("角�
 
 // 当前章节：第一章/第二章是固定的梦幻星球；“w数字”是噜噜根据生活和梦编织出来的世界（按配方搭建）
 const BOOT = await WG.loadRecipe();
+// 对话生成的场景：后端算好的语义布局（步道、展区、围栏…），没有时沿用原来的小路
+const SITE = BOOT.scene?.site ? createSite(BOOT.scene.site) : null;
 const R = BOOT.recipe;          // 编织世界的配方；固定章节时为 null
 const GEN = !!R;
 
@@ -45,7 +50,7 @@ const SPAWN = { x: 22, z: 70 };
 const WORLD_R = 168;
 
 // 编织世界：地形按配方；湖只在 water=lake 时有；海/群岛时海平面覆盖全图
-const rawH = GEN ? WG.terrainFor(R.terrain, fbm) : (x, z) => 3.2 + fbm(x * 0.012 + 10, z * 0.012 + 3) * 9 + fbm(x * 0.05, z * 0.05, 3) * 1.1;
+const rawH = BOOT.scene ? (x,z) => 2.8 + fbm(x*.018,z*.018,2)*.6 : GEN ? WG.terrainFor(R.terrain, fbm) : (x, z) => 3.2 + fbm(x * 0.012 + 10, z * 0.012 + 3) * 9 + fbm(x * 0.05, z * 0.05, 3) * 1.1;
 const SEA = GEN && WG.isSea(R);
 const HAS_LAKE = !GEN || R.water === "lake";
 const CABIN_Y = Math.max(2, rawH(CABIN.x, CABIN.z));
@@ -57,7 +62,7 @@ const PATH = new THREE.CatmullRomCurve3([
   new THREE.Vector3(SPAWN.x, 0, SPAWN.z - 4), new THREE.Vector3(8, 0, 44), new THREE.Vector3(-8, 0, 18),
   new THREE.Vector3(-18, 0, 0), new THREE.Vector3(CABIN.x, 0, CABIN.z + 6),
 ]);
-const PATH_PTS = PATH.getSpacedPoints(80);
+const PATH_PTS = SITE ? SITE.pathPoints : PATH.getSpacedPoints(80);
 const pathDist2 = (x, z) => { let m = Infinity; for (const p of PATH_PTS) m = Math.min(m, (p.x - x) ** 2 + (p.z - z) ** 2); return m; };
 const nearPath = (x, z, d) => PATH_PTS.some((p) => (p.x - x) ** 2 + (p.z - z) ** 2 < d * d);
 
@@ -326,6 +331,7 @@ if (!GEN || WG.hasGrass(R)) {
     const h = heightAt(x, z);
     if (h < 0.5 || h > 12) continue;
     if (Math.abs(x - CABIN.x) < 6 && Math.abs(z - CABIN.z) < 5) continue;
+    if (SITE?.bare(x, z)) continue;
     v.set(x, h - 0.05, z);
     q.setFromAxisAngle(up, Math.random() * Math.PI);
     const sc = rand(0.7, 1.3);
@@ -350,6 +356,7 @@ if (!GEN || WG.hasGrass(R)) {
     const x = rand(-120, 130), z = rand(-120, 120), h = heightAt(x, z);
     if (h < 0.8 || h > 11 || forestNoise(x, z) > 0.1) continue;
     if (fbm(x * 0.05 + 30, z * 0.05, 2) < 0.05) continue; // 成片开
+    if (SITE?.bare(x, z)) continue;
     m.makeTranslation(x, h + rand(0.3, 0.55), z);
     flowers.setMatrixAt(n, m);
     flowers.setColorAt(n, col.set(pick(GEN ? [...R.flora.colors, PAL.accent, "#ffffff"] : ["#ff9ec7", "#ffe17a", "#ffffff", "#c9a8ff", "#8fd3ff", "#ffb38a"])));
@@ -363,7 +370,7 @@ if (!GEN || WG.hasGrass(R)) {
 const treeColliders = [];
 if (GEN) {
   // 编织世界：按配方的植物种类、颜色、密度来种
-  const N = Math.round(120 + R.flora.density * 520);
+  const N = BOOT.scene ? 0 : Math.round(120 + R.flora.density * 520);
   const kit = WG.floraKit(R.flora.type, R.flora.colors, N);
   const dense = R.terrain === "forest" ? -0.15 : 0.08 - R.flora.density * 0.2;
   let n = 0;
@@ -431,7 +438,7 @@ if (!GEN) {
 }
 
 // ======================= 小路（踏脚石） =======================
-{
+if (!SITE) {
   const curve = PATH;
   const N = 70;
   const stones = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.55, 0.62, 0.16, 9), new THREE.MeshLambertMaterial({ color: 0xe8dcf0 }), N);
@@ -452,7 +459,10 @@ const cloudGroup = new THREE.Group();
 scene.add(cloudGroup);
 {
   const white = new THREE.Color("#ffffff");
-  const COLORS = GEN
+  // 对话生成的场景（世界工作室）：云只取天空色并更白，避免主色/植物色把云染成橙绿色。
+  const COLORS = BOOT.scene
+    ? [PAL.horizon, PAL.sky_mid, "#ffffff"].map((c) => "#" + new THREE.Color(c).lerp(white, 0.6).getHexString())
+    : GEN
     ? [PAL.horizon, PAL.sky_mid, PAL.accent, ...R.flora.colors].map((c) => "#" + new THREE.Color(c).lerp(white, 0.45).getHexString())
     : ["#ffc4dd", "#ffd9b3", "#d6c4ff", "#bfe9ff", "#c8f7d4", "#fff1b8", "#ffb8c9"];
   const geo = new THREE.IcosahedronGeometry(1, 1);
@@ -904,6 +914,8 @@ Cat.root.getWorldPosition(catWorld);
 
 // ======================= 编织世界：地标、噜噜的装扮、收集物 =======================
 const landmarks = [];   // { group, x, z }
+if (SITE) SITE.build({ scene, heightAt, colliders: treeColliders });
+const generatedAssets = BOOT.scene ? await mountGeneratedScene({scene, job:BOOT.scene, heightAt, colliders:treeColliders}) : null;
 const items = [];       // { group, x, y, z, found }
 
 // 可达地图：2 米一格，从出生点出发能走到的格子（不进深水、不爬太陡的坡）。地标和收集物只放在能走到的地方。
@@ -1076,7 +1088,7 @@ if (GEN) {
 const EYE = 1.65, RADIUS = 0.35;
 const player = {
   pos: new THREE.Vector3(SPAWN.x, heightAt(SPAWN.x, SPAWN.z), SPAWN.z), vel: new THREE.Vector3(),
-  yaw: Math.atan2(-(CABIN.x - SPAWN.x), -(CABIN.z - SPAWN.z)), pitch: -0.05, onGround: true,
+  yaw: SITE ? Math.atan2(-(SITE.data.gate[0] - SPAWN.x), -(SITE.data.gate[1] - SPAWN.z)) : Math.atan2(-(CABIN.x - SPAWN.x), -(CABIN.z - SPAWN.z)), pitch: -0.05, onGround: true,
 };
 const keys = {};
 let locked = false, chatting = false, started = false;
@@ -1168,24 +1180,33 @@ const canControl = () => canLook() && J.state === "none";
 // 按键状态：只有收到 keyup 才算松开。如果松手时焦点不在页面上（点了页面外、切窗口、内嵌浏览器丢焦点），
 // keyup 会丢失，角色就会一直往一个方向走。所以在各种“可能丢 keyup”的时刻都把按键全部清掉。
 const codeOfKey = {};
+const padPresses=new Map();
 function releaseAll() {
   for (const k in keys) keys[k] = false;
+  for (const press of padPresses.values()) if(press.timer)clearTimeout(press.timer);
+  padPresses.clear();
+  document.querySelectorAll('[data-move].held').forEach(button=>button.classList.remove('held'));
   dragging = false;
 }
 addEventListener("keydown", (e) => {
-  if (chatting) { if (e.code === "Escape") closeChat(); return; }
-  if (e.code === "Escape" && freeMode && !paused) { pause("已暂停"); return; }
-  keys[e.code] = true;
-  if (e.key) codeOfKey[e.key.toLowerCase()] = e.code;
-  if (["Space", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(e.code)) e.preventDefault();
-  if (e.code === "KeyE" && canLook() && (nearCat() || J.state === "space")) openChat();
-  if (e.code === "KeyF" && chapter === "voyage" && canControl() && nearCat()) startJourney(true);
-  if (e.code === "KeyH" && canLook() && J.state === "space") goHome();
-  if (e.code === "KeyV" && canLook() && J.state === "space") { J.cockpit = !J.cockpit; player.yaw = 0; player.pitch = 0; }
+  const code=inputCode(e);
+  if (!code) return;
+  // Preserve the existing handler's code-based controls when the webview only
+  // forwards key names. Never capture typing in a text field outside the game.
+  if (!chatting && /^(INPUT|TEXTAREA|SELECT)$/.test(e.target?.tagName)) return;
+  if (chatting) { if (code === "Escape") closeChat(); return; }
+  if (code === "Escape" && freeMode && !paused) { pause("已暂停"); return; }
+  keys[code] = true;
+  if (e.key) codeOfKey[e.key.toLowerCase()] = code;
+  if (["Space", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight",'KeyW','KeyA','KeyS','KeyD'].includes(code)) e.preventDefault();
+  if (code === "KeyE" && canLook() && (nearCat() || J.state === "space")) openChat();
+  if (code === "KeyF" && chapter === "voyage" && canControl() && nearCat()) startJourney(true);
+  if (code === "KeyH" && canLook() && J.state === "space") goHome();
+  if (code === "KeyV" && canLook() && J.state === "space") { J.cockpit = !J.cockpit; player.yaw = 0; player.pitch = 0; }
 });
 // 用捕获阶段监听，任何元素都拦不住；同时按 code 和 key 两种方式清除（输入法下 code 偶尔对不上）
 addEventListener("keyup", (e) => {
-  keys[e.code] = false;
+  keys[inputCode(e)] = false;
   const c = e.key && codeOfKey[e.key.toLowerCase()];
   if (c) keys[c] = false;
   if (e.key === "Shift") keys.ShiftLeft = keys.ShiftRight = false;
@@ -1201,6 +1222,7 @@ addEventListener("mousemove", (e) => {
   if ((locked && canLook()) || (freeMode && dragging && canLook())) look(e.movementX, e.movementY);
 });
 canvas.addEventListener("pointerdown", (e) => {
+  canvas.focus({preventScroll:true});
   if (freeMode && e.button === 0) { dragging = true; canvas.style.cursor = "grabbing"; }
   // 锁定模式下鼠标被释放了（比如关掉对话框后），点一下画面重新锁上
   else if (!freeMode && !locked && started && !paused && !chatting) lock();
@@ -1214,8 +1236,9 @@ document.addEventListener("pointerlockchange", () => {
   Object.keys(keys).forEach((k) => (keys[k] = false));
 });
 function enterFreeMode() {
-  if (!freeMode) showHint("这个窗口不能锁定鼠标（在 Chrome / Edge 里打开就可以）：现在先按住左键拖动转视角", 7000);
+  if (!freeMode) showHint("WASD 行走，拖动画面转头；也可按住右下角按钮移动。", 5000);
   freeMode = true;
+  $('walk-controls').hidden=false;
   canvas.style.cursor = "grab";
   resume();
 }
@@ -1227,6 +1250,8 @@ function resume() {
 }
 function lock() {
   if (freeMode) { resume(); return; }
+  // Starting must not depend on a pointer-lock promise/event from the host.
+  resume();
   // 同一次点击里：先锁鼠标（光标隐藏并固定在画面中央，移动鼠标就转头），再进全屏。
   // unadjustedMovement 关掉系统鼠标加速，转头更跟手；不支持的浏览器退回普通锁定。
   try {
@@ -1242,16 +1267,39 @@ function lock() {
     document.documentElement.requestFullscreen({ navigationUI: "hide" }).catch(() => {});
   }
   // 有的环境既不报错也不锁定，稍等一下还没锁上就用拖拽模式
-  setTimeout(() => { if (!locked && !chatting && paused) enterFreeMode(); }, 600);
+  setTimeout(() => { if (!locked && !chatting && started) enterFreeMode(); }, 250);
 }
 document.addEventListener("pointerlockerror", () => { if (!chatting) enterFreeMode(); });
+for(const button of document.querySelectorAll('[data-move]')){
+  const code=button.dataset.move;
+  button.addEventListener('pointerdown',e=>{
+    e.preventDefault();e.stopPropagation();
+    if(!started||chatting)return;
+    if(paused)resume();
+    freeMode=true;canvas.focus({preventScroll:true});
+    button.setPointerCapture(e.pointerId);
+    const previous=padPresses.get(code);if(previous?.timer)clearTimeout(previous.timer);
+    padPresses.set(code,{at:performance.now()});keys[code]=true;button.classList.add('held');
+  });
+  const stop=()=>{
+    const press=padPresses.get(code);if(!press)return;
+    if(press.timer)return;
+    const finish=()=>{keys[code]=false;button.classList.remove('held');padPresses.delete(code);};
+    // Short clicks take a visible step; holding stays continuous until release.
+    const remaining=Math.max(0,230-(performance.now()-press.at));
+    if(remaining)press.timer=setTimeout(finish,remaining);else finish();
+  };
+  button.addEventListener('pointerup',stop);button.addEventListener('pointercancel',stop);
+  button.addEventListener('lostpointercapture',stop);
+}
 // ======================= 章节 =======================
 // 第一章「小木屋」：星球上散步、去小木屋找噜噜（没有 UFO）
 // 第二章「星际旅行」：从小木屋出发，噜噜带你坐 UFO 去太空
 let chapter = "cabin", chapterApplied = null;
 async function loadChapters() {
   let list = [{ id: "cabin", title: "第一章 · 小木屋", desc: "", unlocked: true }];
-  try { list = await fetch("/api/chapters").then((r) => r.json()); } catch {}
+  if (BOOT.scene) list=[{id:BOOT.chapterId,title:R.title,desc:'来自你和噜噜的对话',unlocked:true}];
+  else try { list = await fetch("/api/chapters").then((r) => r.json()); } catch {}
   const want = BOOT.chapterId;
   chapter = list.some((c) => c.id === want && c.unlocked) ? want : "cabin";
   const box = $("chapters");
@@ -1308,6 +1356,15 @@ $("enterBtn").addEventListener("click", () => {
   if (!applyChapter(chapter)) return;
   started = true;
   lock();
+});
+$('externalPlay').addEventListener('click',async()=>{
+  const button=$('externalPlay');button.disabled=true;
+  try{
+    const body=BOOT.scene?{scene_id:BOOT.scene.id}:{chapter};
+    const response=await fetch('/api/open-world',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+    const result=await response.json();if(!response.ok)throw new Error(result.detail||'打开失败');
+    $('externalMessage').textContent='已打开独立浏览器，请切换到那个窗口并点击进入，随后用 WASD 行走。';
+  }catch(e){$('externalMessage').textContent=e.message;}finally{button.disabled=false;}
 });
 function pause(sub) {
   paused = true;
@@ -1957,6 +2014,11 @@ async function pumpEvents() {
 function startGenWorld() {
   visited = true;
   player.yaw = Math.atan2(-(CABIN.x - player.pos.x), -(CABIN.z - player.pos.z));
+  if (BOOT.scene) {
+    Q.met=true; Q.done=true;
+    caption('和噜噜一起，走进你记忆里的世界。',4500);
+    return;
+  }
   updateQuestHud();
   setTimeout(() => {
     caption(`✦ ${R.title}`, 4500);
@@ -1968,6 +2030,7 @@ function startGenWorld() {
 
 function updateQuestHud() {
   const el = $("quest");
+  if (BOOT.scene) { el.hidden=true; return; }
   if (!GEN) { el.hidden = true; return; }
   el.hidden = false;
   el.textContent = Q.done
@@ -2064,6 +2127,7 @@ function collect(it) {
 }
 
 function updateQuest(dt, t) {
+  if (BOOT.scene) return;
   if (!GEN) return;
   for (const lm of landmarks) WG.animateLandmark(lm.group, t);
   for (const it of items) {
@@ -2105,6 +2169,13 @@ function tick() {
   perf[st].frames++;
   if (frameMs > 50) perf[st].over50++;
   const dt = Math.min(clock.getDelta(), 0.05), t = clock.elapsedTime;
+  if (BOOT.scene && Math.floor(t*2)!==Number(canvas.dataset.sampleTick)) {
+    canvas.dataset.sampleTick=String(Math.floor(t*2));
+    canvas.dataset.playerPosition=JSON.stringify(player.pos.toArray());
+    canvas.dataset.sceneId=BOOT.scene.id;
+    canvas.dataset.controls=JSON.stringify({started,paused,freeMode,locked,canControl:canControl(),focused:document.hasFocus()});
+  }
+  if(freeMode&&started&&!chatting){$('walk-status').textContent=paused?'已暂停，点继续':Math.hypot(player.vel.x,player.vel.z)>.2?'正在行走':'WASD 行走 · 拖动画面转头';}
   // 内嵌浏览器里点到页面外时不一定触发 blur：每帧看一下焦点，从“有”变成“没有”的那一刻清掉按键
   const focusedNow = document.hasFocus();
   if (hadFocus && !focusedNow) releaseAll();
@@ -2135,6 +2206,7 @@ function tick() {
   fireflyMat.uniforms.uTime.value = t;
   if (WEATHER_MODE !== 0) weatherPoints.position.set(camera.position.x - BOX / 2 * 0, Math.max(camera.position.y - 14, WATER), camera.position.z);
   updateQuest(dt, t);
+  generatedAssets?.update(dt,t);
   cloudGroup.rotation.y = t * 0.004;
   cloudGroup.children.forEach((c) => (c.position.y += Math.sin(t * 0.3 + c.userData.bob) * 0.01));
   islands.forEach((isl, i) => { isl.position.y = isl.userData.y + Math.sin(t * 0.5 + i) * 1.5; isl.rotation.y = t * 0.03 * (i % 2 ? 1 : -1); });
@@ -2177,6 +2249,7 @@ renderer.compile(scene, camera);
 loadChapters();
 // 调试用：在控制台里 __world.teleport(x, z, 朝向) 可以瞬移
 window.__world = {
+  generatedAssets, colliders: treeColliders,
   player, CABIN, LAKE, keys, J, startJourney, goHome, UFO, Q, items, landmarks, R, cat: Cat.root,
   catOnScreen() { const p = catHeadWorld().project(camera); return p.z < 1 && Math.abs(p.x) < 1 && Math.abs(p.y) < 1; },
   // 不渲染、固定步长地模拟“玩家一直跟着噜噜走”（窗口隐藏时也能测）

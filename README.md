@@ -49,7 +49,20 @@ cd companion; python -m voice_pack.download --models-dir D:\xiaonuan-models; cd 
 
 源码运行同一个入口：`python -m xiaonuan_app`。
 
+在同一台 Windows 电脑上开发、测试和 USB 更新板子：先运行
+`./setup-dev.ps1`，以后双击 `start-dev.cmd`；修改板上源码后运行
+`./flash-dev.ps1 -Port COM7`（串口按实际设备填写）。继续使用已有
+`%APPDATA%\Xiaonuan` 数据，不必再打包。完整步骤见
+[本地开发说明](docs/LOCAL-DEVELOPMENT.md)。
+
 ## 运行已有的小暖
+
+### 对话生成世界
+
+访问 [世界工作室](http://127.0.0.1:8765/world-studio)，由专门的场景规划模型
+把对话整理成标准资产/实例/关系，再并行执行 GPT 生图和 Rodin / Tripo 建模，
+导入原有可行走世界。支持逐资产参考图、场景修订、成品复用与任务恢复。
+动物园演示与配置说明见 [世界工作室说明](docs/SCENE-STUDIO.md)。
 
 当前电脑已有原应用时，继续使用原来的 Companion 根目录，保留它的 `.env`、`data/`、人设和模型。不要用新克隆的空数据目录替换原应用。
 

@@ -1,0 +1,580 @@
+{
+  "schema_version": "1.0",
+  "title": "动物园的午后回忆",
+  "summary": "一座可漫步的动物园：园内宽阔、树木茂密。大猩猩、大象、大熊猫各自拥有独立展区；一只鹦鹉停栖在指定树木的侧枝上；两只老虎在同一虎区内打斗。新增木质入口、游客休息亭与动物栖息棚，沿游客步道布置。所有动物均为独立可复用资产，沿既有步道从 (22,0,70) 向 (-24,0,-16) 布置展区。",
+  "style": "写实自然主义高级游戏美术，统一比例与解剖结构，细致 PBR 材质，中性可读姿态，均光，浅色纯背景，无场景、文字、底座或多视图拼贴；建筑采用统一自然木材与石材风格。",
+  "quotes": [
+    "噜噜，我今天去动物园玩了，里面好大、好多树",
+    "我看到了好多动物有大猩猩、大象、大熊猫、树上还有鹦鹉",
+    "甚至还有两只老虎打起来了"
+  ],
+  "assets": [
+    {
+      "id": "tree",
+      "name": "阔叶树",
+      "kind": "plant",
+      "description": "通用园景阔叶乔木，单一纯树资产，粗壮树干与茂密树冠，不含任何动物或鸟。用于园区边缘和展区之间，其中一棵的侧枝供鹦鹉停栖。",
+      "image_prompt": "A single tall broadleaf deciduous tree with a sturdy textured trunk and dense rounded canopy of green leaves, naturalistic premium game art, detailed PBR bark and leaf materials, neutral upright pose, even soft lighting, pale plain background, no scenery, no text, no base, no multi-view collage, no birds, no animals.",
+      "height_m": 7.0,
+      "collision_radius_m": 0.8,
+      "source_quotes": [
+        0,
+        2
+      ],
+      "inferred": false
+    },
+    {
+      "id": "gorilla",
+      "name": "大猩猩",
+      "kind": "animal",
+      "description": "成年大猩猩，体格健壮，黑色毛发，展示区地面活动。",
+      "image_prompt": "A single adult silverback gorilla standing on all fours in a neutral calm pose, black hair with silver back saddle, realistic muscular anatomy, naturalistic premium game art, detailed PBR fur and skin materials, even soft lighting, pale plain background, no scenery, no text, no base, no multi-view collage.",
+      "height_m": 1.7,
+      "collision_radius_m": 1.0,
+      "source_quotes": [
+        1
+      ],
+      "inferred": false
+    },
+    {
+      "id": "elephant",
+      "name": "大象",
+      "kind": "animal",
+      "description": "成年大象，长鼻、大耳与象牙，体量巨大，置于开阔象舍区。",
+      "image_prompt": "A single adult African elephant standing in a neutral pose, large ears, long trunk hanging down, tusks, gray wrinkled skin, realistic anatomy, naturalistic premium game art, detailed PBR skin materials, even soft lighting, pale plain background, no scenery, no text, no base, no multi-view collage.",
+      "height_m": 3.2,
+      "collision_radius_m": 2.0,
+      "source_quotes": [
+        1
+      ],
+      "inferred": false
+    },
+    {
+      "id": "panda",
+      "name": "大熊猫",
+      "kind": "animal",
+      "description": "成年大熊猫，黑白配色，坐姿或缓步姿态，位于竹林旁展示区。",
+      "image_prompt": "A single adult giant panda sitting upright in a neutral pose, black and white fur, round face with black eye patches, realistic anatomy, naturalistic premium game art, detailed PBR fur materials, even soft lighting, pale plain background, no scenery, no text, no base, no multi-view collage.",
+      "height_m": 1.6,
+      "collision_radius_m": 1.0,
+      "source_quotes": [
+        1
+      ],
+      "inferred": false
+    },
+    {
+      "id": "parrot",
+      "name": "鹦鹉",
+      "kind": "animal",
+      "description": "色彩鲜艳的中型鹦鹉，中性站立姿态，真实体高0.6米，实例将停栖在指定树木的侧枝上。",
+      "image_prompt": "A single colorful parrot perched upright in a neutral pose, vivid green and red plumage, curved beak, realistic anatomy, naturalistic premium game art, detailed PBR feather materials, even soft lighting, pale plain background, no scenery, no text, no base, no multi-view collage.",
+      "height_m": 0.6,
+      "collision_radius_m": 0.2,
+      "source_quotes": [
+        1
+      ],
+      "inferred": false
+    },
+    {
+      "id": "tiger",
+      "name": "老虎",
+      "kind": "animal",
+      "description": "成年老虎，橙底黑色条纹，单只资产保持中性站姿，同一资产复用两次，打斗动作由实例关系表达，不含受伤或血迹。",
+      "image_prompt": "A single adult tiger standing in a neutral readable pose, orange coat with black stripes, white muzzle and belly, realistic muscular anatomy, naturalistic premium game art, detailed PBR fur materials, even soft lighting, pale plain background, no scenery, no text, no base, no multi-view collage.",
+      "height_m": 1.1,
+      "collision_radius_m": 1.2,
+      "source_quotes": [
+        2
+      ],
+      "inferred": false
+    },
+    {
+      "id": "entrance_gate",
+      "name": "动物园入口",
+      "kind": "structure",
+      "description": "自然木材与石材搭建的园区入口门楼，可穿行，碰撞半径为0，沿游客步道起点附近布置。",
+      "image_prompt": "A single wooden and stone zoo entrance gate with timber posts, natural stone base and an open walkway, realistic architecture, naturalistic premium game art, detailed PBR wood and stone materials, neutral frontal pose, even soft lighting, pale plain background, no scenery, no text, no base, no multi-view collage.",
+      "height_m": 4.5,
+      "collision_radius_m": 0.0,
+      "source_quotes": [
+        0
+      ],
+      "inferred": true
+    },
+    {
+      "id": "rest_pavilion",
+      "name": "游客休息亭",
+      "kind": "structure",
+      "description": "木质柱与石质基座的游客休息亭，带顶棚，沿步道布置，供游客休憩。",
+      "image_prompt": "A single wooden rest pavilion with timber posts, natural stone base and a simple pitched roof, realistic architecture, naturalistic premium game art, detailed PBR wood and stone materials, neutral pose, even soft lighting, pale plain background, no scenery, no text, no base, no multi-view collage.",
+      "height_m": 3.8,
+      "collision_radius_m": 3.0,
+      "source_quotes": [
+        0
+      ],
+      "inferred": true
+    },
+    {
+      "id": "animal_shelter",
+      "name": "动物栖息棚",
+      "kind": "structure",
+      "description": "木质与石质动物栖息棚，带开口和顶棚，位于动物展区内，为动物提供遮蔽。",
+      "image_prompt": "A single wooden and stone animal shelter hut with timber frame, natural stone lower walls and a pitched roof, realistic architecture, naturalistic premium game art, detailed PBR wood and stone materials, neutral pose, even soft lighting, pale plain background, no scenery, no text, no base, no multi-view collage.",
+      "height_m": 3.0,
+      "collision_radius_m": 2.5,
+      "source_quotes": [
+        0
+      ],
+      "inferred": true
+    }
+  ],
+  "instances": [
+    {
+      "id": "tree_01",
+      "asset_id": "tree",
+      "position": [
+        36.0,
+        0.0,
+        12.0
+      ],
+      "yaw": 0.3,
+      "scale": 1.0,
+      "parent_id": null
+    },
+    {
+      "id": "tree_02",
+      "asset_id": "tree",
+      "position": [
+        38.0,
+        0.0,
+        18.0
+      ],
+      "yaw": 1.1,
+      "scale": 1.0,
+      "parent_id": null
+    },
+    {
+      "id": "tree_03",
+      "asset_id": "tree",
+      "position": [
+        37.0,
+        0.0,
+        25.0
+      ],
+      "yaw": 2.4,
+      "scale": 1.0,
+      "parent_id": null
+    },
+    {
+      "id": "tree_04",
+      "asset_id": "tree",
+      "position": [
+        36.0,
+        0.0,
+        32.0
+      ],
+      "yaw": 0.8,
+      "scale": 1.0,
+      "parent_id": null
+    },
+    {
+      "id": "tree_05",
+      "asset_id": "tree",
+      "position": [
+        38.0,
+        0.0,
+        40.0
+      ],
+      "yaw": 1.9,
+      "scale": 1.0,
+      "parent_id": null
+    },
+    {
+      "id": "tree_06",
+      "asset_id": "tree",
+      "position": [
+        35.0,
+        0.0,
+        48.0
+      ],
+      "yaw": 0.5,
+      "scale": 1.0,
+      "parent_id": null
+    },
+    {
+      "id": "tree_07",
+      "asset_id": "tree",
+      "position": [
+        34.0,
+        0.0,
+        55.0
+      ],
+      "yaw": 2.9,
+      "scale": 1.0,
+      "parent_id": null
+    },
+    {
+      "id": "tree_08",
+      "asset_id": "tree",
+      "position": [
+        -18.0,
+        0.0,
+        12.0
+      ],
+      "yaw": 1.3,
+      "scale": 1.0,
+      "parent_id": null
+    },
+    {
+      "id": "tree_09",
+      "asset_id": "tree",
+      "position": [
+        -17.0,
+        0.0,
+        19.0
+      ],
+      "yaw": 0.2,
+      "scale": 1.0,
+      "parent_id": null
+    },
+    {
+      "id": "tree_10",
+      "asset_id": "tree",
+      "position": [
+        -18.0,
+        0.0,
+        26.0
+      ],
+      "yaw": 2.1,
+      "scale": 1.0,
+      "parent_id": null
+    },
+    {
+      "id": "tree_11",
+      "asset_id": "tree",
+      "position": [
+        -16.0,
+        0.0,
+        34.0
+      ],
+      "yaw": 0.7,
+      "scale": 1.0,
+      "parent_id": null
+    },
+    {
+      "id": "tree_12",
+      "asset_id": "tree",
+      "position": [
+        -18.0,
+        0.0,
+        42.0
+      ],
+      "yaw": 1.6,
+      "scale": 1.0,
+      "parent_id": null
+    },
+    {
+      "id": "tree_13",
+      "asset_id": "tree",
+      "position": [
+        -17.0,
+        0.0,
+        50.0
+      ],
+      "yaw": 2.7,
+      "scale": 1.0,
+      "parent_id": null
+    },
+    {
+      "id": "tree_14",
+      "asset_id": "tree",
+      "position": [
+        -18.0,
+        0.0,
+        55.0
+      ],
+      "yaw": 0.4,
+      "scale": 1.0,
+      "parent_id": null
+    },
+    {
+      "id": "tree_15",
+      "asset_id": "tree",
+      "position": [
+        8.0,
+        0.0,
+        10.0
+      ],
+      "yaw": 1.0,
+      "scale": 1.0,
+      "parent_id": null
+    },
+    {
+      "id": "tree_16",
+      "asset_id": "tree",
+      "position": [
+        16.0,
+        0.0,
+        11.0
+      ],
+      "yaw": 2.2,
+      "scale": 1.0,
+      "parent_id": null
+    },
+    {
+      "id": "tree_17",
+      "asset_id": "tree",
+      "position": [
+        26.0,
+        0.0,
+        10.0
+      ],
+      "yaw": 0.6,
+      "scale": 1.0,
+      "parent_id": null
+    },
+    {
+      "id": "tree_18",
+      "asset_id": "tree",
+      "position": [
+        32.0,
+        0.0,
+        16.0
+      ],
+      "yaw": 1.8,
+      "scale": 1.0,
+      "parent_id": null
+    },
+    {
+      "id": "tree_19",
+      "asset_id": "tree",
+      "position": [
+        -6.0,
+        0.0,
+        12.0
+      ],
+      "yaw": 2.5,
+      "scale": 1.0,
+      "parent_id": null
+    },
+    {
+      "id": "tree_20",
+      "asset_id": "tree",
+      "position": [
+        -12.0,
+        0.0,
+        14.0
+      ],
+      "yaw": 0.9,
+      "scale": 1.0,
+      "parent_id": null
+    },
+    {
+      "id": "tree_21",
+      "asset_id": "tree",
+      "position": [
+        0.0,
+        0.0,
+        53.0
+      ],
+      "yaw": 1.4,
+      "scale": 1.0,
+      "parent_id": null
+    },
+    {
+      "id": "tree_22",
+      "asset_id": "tree",
+      "position": [
+        10.0,
+        0.0,
+        55.0
+      ],
+      "yaw": 2.8,
+      "scale": 1.0,
+      "parent_id": null
+    },
+    {
+      "id": "tree_23",
+      "asset_id": "tree",
+      "position": [
+        20.0,
+        0.0,
+        54.0
+      ],
+      "yaw": 0.3,
+      "scale": 1.0,
+      "parent_id": null
+    },
+    {
+      "id": "gorilla_01",
+      "asset_id": "gorilla",
+      "position": [
+        26.0,
+        0.0,
+        20.0
+      ],
+      "yaw": 3.1,
+      "scale": 1.0,
+      "parent_id": null
+    },
+    {
+      "id": "elephant_01",
+      "asset_id": "elephant",
+      "position": [
+        6.0,
+        0.0,
+        30.0
+      ],
+      "yaw": 1.57,
+      "scale": 1.0,
+      "parent_id": null
+    },
+    {
+      "id": "panda_01",
+      "asset_id": "panda",
+      "position": [
+        26.0,
+        0.0,
+        42.0
+      ],
+      "yaw": 3.6,
+      "scale": 1.0,
+      "parent_id": null
+    },
+    {
+      "id": "parrot_tree_main",
+      "asset_id": "tree",
+      "position": [
+        24.0,
+        0.0,
+        8.0
+      ],
+      "yaw": 0.9,
+      "scale": 1.0,
+      "parent_id": null
+    },
+    {
+      "id": "parrot_01",
+      "asset_id": "parrot",
+      "position": [
+        0.4,
+        3.6,
+        0.3
+      ],
+      "yaw": 0.6,
+      "scale": 1.0,
+      "parent_id": "parrot_tree_main"
+    },
+    {
+      "id": "tiger_01",
+      "asset_id": "tiger",
+      "position": [
+        16.0,
+        0.0,
+        44.0
+      ],
+      "yaw": 1.57,
+      "scale": 1.0,
+      "parent_id": null
+    },
+    {
+      "id": "tiger_02",
+      "asset_id": "tiger",
+      "position": [
+        17.4,
+        0.0,
+        44.0
+      ],
+      "yaw": 4.71,
+      "scale": 1.0,
+      "parent_id": null
+    },
+    {
+      "id": "entrance_gate_01",
+      "asset_id": "entrance_gate",
+      "position": [
+        15.396868495279751,
+        0.0,
+        57.65501501291432
+      ],
+      "yaw": 0.4911635982862605,
+      "scale": 1.0,
+      "parent_id": null
+    },
+    {
+      "id": "rest_pavilion_01",
+      "asset_id": "rest_pavilion",
+      "position": [
+        -2.0,
+        0.0,
+        48.0
+      ],
+      "yaw": 0.0,
+      "scale": 1.0,
+      "parent_id": null
+    },
+    {
+      "id": "animal_shelter_01",
+      "asset_id": "animal_shelter",
+      "position": [
+        26.0,
+        0.0,
+        26.0
+      ],
+      "yaw": 0.0,
+      "scale": 1.0,
+      "parent_id": null
+    },
+    {
+      "id": "animal_shelter_02",
+      "asset_id": "animal_shelter",
+      "position": [
+        8.563949068055248,
+        0.0,
+        34.422185188889074
+      ],
+      "yaw": 1.57,
+      "scale": 1.0,
+      "parent_id": null
+    },
+    {
+      "id": "animal_shelter_03",
+      "asset_id": "animal_shelter",
+      "position": [
+        26.0,
+        0.0,
+        48.0
+      ],
+      "yaw": 3.14,
+      "scale": 1.0,
+      "parent_id": null
+    }
+  ],
+  "relations": [
+    {
+      "kind": "perched_on",
+      "subjects": [
+        "parrot_01",
+        "parrot_tree_main"
+      ],
+      "description": "鹦鹉停栖在主树冠侧枝上，位于树冠下方。"
+    },
+    {
+      "kind": "fighting",
+      "subjects": [
+        "tiger_01",
+        "tiger_02"
+      ],
+      "description": "两只老虎在虎区近距离对峙打斗，不含受伤或血迹。"
+    },
+    {
+      "kind": "near",
+      "subjects": [
+        "tiger_01",
+        "tiger_02"
+      ],
+      "description": "两只老虎共用同一虎区展场。"
+    }
+  ],
+  "layout_notes": "沿既有步道 (22,0,70)→(-24,0,-16) 布置。展区限定 x=-18..38、z=10..55，中间留出宽约 6 米的游客步道。入口门楼位于 (22,66)，靠近出生点但不阻挡，可穿行，碰撞半径为0。游客休息亭在 (-2,48) 步道旁，不占主路。动物栖息棚分别置于大猩猩区 (26,26)、大象区 (6,36)、大熊猫区 (26,48)。大象在 (6,30) 居中偏左，大猩猩在 (26,20) 东侧，大熊猫在 (26,42) 东侧，两只老虎集中在 (16..17.4,44) 虎区，鹦鹉树位于 (24,8) 步道南侧。23 棵纯树沿 z=10..12 与 z=53..55 两条边界及 x≈-18、x≈36..38 两侧成排种植，围合展区并遮挡边界。所有动物碰撞半径不重叠，游客可从步道环视各展区。"
+}
