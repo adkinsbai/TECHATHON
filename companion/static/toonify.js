@@ -72,7 +72,8 @@ function toonMaterial(source, tint) {
   const material = new THREE.MeshToonMaterial({
     gradientMap: gradient,
     color: source.map ? new THREE.Color(0xffffff) : storybookColor(source.color || new THREE.Color(0xdddddd), tint),
-    map: source.map ? storybookTexture(source.map, tint) : null,
+    // 文字类贴图（指示牌）保留原图，不做缩小抹平。
+    map: source.map ? (source.userData?.keepTexture ? source.map : storybookTexture(source.map, tint)) : null,
     alphaMap: source.alphaMap || null,
     transparent: source.transparent, opacity: source.opacity, alphaTest: source.alphaTest,
     side: source.side, vertexColors: source.vertexColors,

@@ -16,6 +16,7 @@ import httpx
 
 from . import config
 from .scene_plan import ScenePlan, plan_conversation, world_recipe
+from .scene_site import build_site
 
 
 TRIPO_BASE = 'https://openapi.tripo3d.ai/v3'
@@ -316,7 +317,8 @@ class SceneStudio:
         ready = sum(a['state'] == 'ready' for a in assets.values())
         return {k: v for k, v in job.items() if k != 'assets'} | {
             'assets': assets, 'ready_count': ready, 'asset_count': len(assets),
-            'running': job['id'] in self.tasks, 'world_url': '/world?scene=' + job['id']}
+            'running': job['id'] in self.tasks, 'world_url': '/world?scene=' + job['id'],
+            'site': build_site(job['plan']) if job.get('plan') else None}
 
     def track(self, job, coroutine):
         async def run():

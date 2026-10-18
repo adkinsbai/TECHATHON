@@ -3,7 +3,8 @@ import * as THREE from "three";
 import { createSpace } from "/static/space.js?v=1";
 import * as WG from "/static/worldgen.js?v=2";
 import { loadCharacter, CHARACTER } from "/static/character.js?v=2";
-import { mountGeneratedScene } from '/static/scene-assets.js';
+import { mountGeneratedScene } from '/static/scene-assets.js?v=4';
+import { createSite } from '/static/site.js?v=2';
 import { inputCode } from '/static/world-input.js';
 
 // 伙伴的 3D 模型（噜噜）；加载失败就退回程序画的小猫
@@ -12,6 +13,8 @@ const CHAR_MODEL = await loadCharacter(CHAR_H).catch((e) => { console.warn("角�
 
 // 当前章节：第一章/第二章是固定的梦幻星球；“w数字”是噜噜根据生活和梦编织出来的世界（按配方搭建）
 const BOOT = await WG.loadRecipe();
+// 对话生成的场景：后端算好的语义布局（步道、展区、围栏…），没有时沿用原来的小路
+const SITE = BOOT.scene?.site ? createSite(BOOT.scene.site) : null;
 const R = BOOT.recipe;          // 编织世界的配方；固定章节时为 null
 const GEN = !!R;
 
@@ -59,7 +62,7 @@ const PATH = new THREE.CatmullRomCurve3([
   new THREE.Vector3(SPAWN.x, 0, SPAWN.z - 4), new THREE.Vector3(8, 0, 44), new THREE.Vector3(-8, 0, 18),
   new THREE.Vector3(-18, 0, 0), new THREE.Vector3(CABIN.x, 0, CABIN.z + 6),
 ]);
-const PATH_PTS = PATH.getSpacedPoints(80);
+const PATH_PTS = SITE ? SITE.pathPoints : PATH.getSpacedPoints(80);
 const pathDist2 = (x, z) => { let m = Infinity; for (const p of PATH_PTS) m = Math.min(m, (p.x - x) ** 2 + (p.z - z) ** 2); return m; };
 const nearPath = (x, z, d) => PATH_PTS.some((p) => (p.x - x) ** 2 + (p.z - z) ** 2 < d * d);
 
@@ -328,6 +331,7 @@ if (!GEN || WG.hasGrass(R)) {
     const h = heightAt(x, z);
     if (h < 0.5 || h > 12) continue;
     if (Math.abs(x - CABIN.x) < 6 && Math.abs(z - CABIN.z) < 5) continue;
+    if (SITE?.bare(x, z)) continue;
     v.set(x, h - 0.05, z);
     q.setFromAxisAngle(up, Math.random() * Math.PI);
     const sc = rand(0.7, 1.3);
@@ -352,6 +356,7 @@ if (!GEN || WG.hasGrass(R)) {
     const x = rand(-120, 130), z = rand(-120, 120), h = heightAt(x, z);
     if (h < 0.8 || h > 11 || forestNoise(x, z) > 0.1) continue;
     if (fbm(x * 0.05 + 30, z * 0.05, 2) < 0.05) continue; // 成片开
+    if (SITE?.bare(x, z)) continue;
     m.makeTranslation(x, h + rand(0.3, 0.55), z);
     flowers.setMatrixAt(n, m);
     flowers.setColorAt(n, col.set(pick(GEN ? [...R.flora.colors, PAL.accent, "#ffffff"] : ["#ff9ec7", "#ffe17a", "#ffffff", "#c9a8ff", "#8fd3ff", "#ffb38a"])));
@@ -433,7 +438,7 @@ if (!GEN) {
 }
 
 // ======================= 小路（踏脚石） =======================
-{
+if (!SITE) {
   const curve = PATH;
   const N = 70;
   const stones = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.55, 0.62, 0.16, 9), new THREE.MeshLambertMaterial({ color: 0xe8dcf0 }), N);
@@ -909,6 +914,7 @@ Cat.root.getWorldPosition(catWorld);
 
 // ======================= 编织世界：地标、噜噜的装扮、收集物 =======================
 const landmarks = [];   // { group, x, z }
+if (SITE) SITE.build({ scene, heightAt, colliders: treeColliders });
 const generatedAssets = BOOT.scene ? await mountGeneratedScene({scene, job:BOOT.scene, heightAt, colliders:treeColliders}) : null;
 const items = [];       // { group, x, y, z, found }
 
@@ -1082,7 +1088,7 @@ if (GEN) {
 const EYE = 1.65, RADIUS = 0.35;
 const player = {
   pos: new THREE.Vector3(SPAWN.x, heightAt(SPAWN.x, SPAWN.z), SPAWN.z), vel: new THREE.Vector3(),
-  yaw: Math.atan2(-(CABIN.x - SPAWN.x), -(CABIN.z - SPAWN.z)), pitch: -0.05, onGround: true,
+  yaw: SITE ? Math.atan2(-(SITE.data.gate[0] - SPAWN.x), -(SITE.data.gate[1] - SPAWN.z)) : Math.atan2(-(CABIN.x - SPAWN.x), -(CABIN.z - SPAWN.z)), pitch: -0.05, onGround: true,
 };
 const keys = {};
 let locked = false, chatting = false, started = false;
@@ -2243,7 +2249,7 @@ renderer.compile(scene, camera);
 loadChapters();
 // 调试用：在控制台里 __world.teleport(x, z, 朝向) 可以瞬移
 window.__world = {
-  generatedAssets,
+  generatedAssets, colliders: treeColliders,
   player, CABIN, LAKE, keys, J, startJourney, goHome, UFO, Q, items, landmarks, R, cat: Cat.root,
   catOnScreen() { const p = catHeadWorld().project(camera); return p.z < 1 && Math.abs(p.x) < 1 && Math.abs(p.y) < 1; },
   // 不渲染、固定步长地模拟“玩家一直跟着噜噜走”（窗口隐藏时也能测）

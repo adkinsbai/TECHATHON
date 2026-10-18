@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import {GLTFLoader} from '/static/vendor/GLTFLoader.js';
 import {textSprite} from '/static/worldgen.js?v=2';
 import {toonify, contactShadow} from '/static/toonify.js?v=5';
+import {attachMotion, updateMotion} from '/static/cartoon-motion.js?v=1';
 
 // 默认按绘本卡通风格处理生成的模型；地址加 ?style=pbr 可看原始写实材质做对比。
 const TOON_ON = new URLSearchParams(location.search).get('style') !== 'pbr';
@@ -32,6 +33,7 @@ async function loadRigged(loader, clips) {
 // Asset normalization and scene instances are separate. Parent-relative meters
 // (e.g. a parrot on a tree) never inherit the imported file's arbitrary units.
 export async function mountGeneratedScene({scene, job, heightAt, colliders}) {
+  const site=job.site||null;
   const loader = new GLTFLoader(), nodes = new Map(), templates = new Map(), errors = [], mixers = [];
   const group = new THREE.Group();group.name='generated-scene-'+job.id;scene.add(group);
   const panel=document.createElement('div');panel.id='generated-scene-status';
@@ -68,7 +70,9 @@ export async function mountGeneratedScene({scene, job, heightAt, colliders}) {
     nodes.set(node.id,root);
     const parent=node.parent_id?attach(job.plan.instances.find(n=>n.id===node.parent_id)):group;
     parent.add(root);
-    root.position.fromArray(node.position);root.rotation.y=node.yaw;root.scale.setScalar(node.scale);
+    // 有语义布局时，根节点的位置和朝向以布局为准（停在树上的鸟仍用相对父节点的位置）。
+    const placed=!node.parent_id&&site?.placements?.[node.id];
+    root.position.fromArray(placed?placed.position:node.position);root.rotation.y=placed?placed.yaw:(node.yaw||0);root.scale.setScalar(node.scale||1);
     if(!node.parent_id)root.position.y+=heightAt(root.position.x,root.position.z);
     const template=templates.get(node.asset_id);
     if(template){
@@ -86,19 +90,26 @@ export async function mountGeneratedScene({scene, job, heightAt, colliders}) {
     }
     else{const label=textSprite(definition.name+' · 待制作');label.position.y=2;root.add(label);}
     root.userData.base=root.position.clone();root.userData.definition=definition;
+    const body=root.children.find(c=>c.name===node.asset_id||c.userData?.animations);
+    if(body&&!root.userData.anim)attachMotion(root,body,definition,{perched:!!node.parent_id,fighting:fightIds.has(node.id)});
     if(!node.parent_id&&TOON_ON){
       const r=Math.min(4,Math.max(.3,definition.collision_radius_m*1.4,definition.height_m*.25));
       root.add(contactShadow(r/Math.max(.01,node.scale)));
     }
-    if(!node.parent_id&&definition.collision_radius_m>0){
-      const collider={x:root.position.x,z:root.position.z,r:definition.collision_radius_m*node.scale};colliders.push(collider);root.userData.collider=collider;
+    const collisionR=placed&&placed.collision_radius!=null?placed.collision_radius:definition.collision_radius_m;
+    if(!node.parent_id&&collisionR>0){
+      const collider={x:root.position.x,z:root.position.z,r:collisionR*(node.scale||1)};colliders.push(collider);root.userData.collider=collider;
     }
     return root;
   };
-  for(const node of job.plan.instances)attach(node);
+  const hidden=new Set(site?.hidden||[]);
+  const fightIds=new Set(job.plan.relations.filter(r=>r.kind==='fighting').flatMap(r=>r.subjects));
+  const allNodes=[...job.plan.instances.filter(n=>!hidden.has(n.id)),...(site?.extra_instances||[])];
+  for(const node of allNodes)attach(node);
   // Labels belong to exhibits, rather than repeating over every tree instance.
+  // 有语义布局时展区前有指示牌，不再在模型头顶漂浮名字。
   const labeled=new Set();
-  for(const node of job.plan.instances){
+  for(const node of site?[]:job.plan.instances){
     const root=nodes.get(node.id),asset=root.userData.definition;
     if(asset.kind==='plant'||labeled.has(asset.id))continue;labeled.add(asset.id);
     const label=textSprite(asset.name);label.position.y=asset.height_m+1.2;root.add(label);
@@ -108,6 +119,7 @@ export async function mountGeneratedScene({scene, job, heightAt, colliders}) {
   let motionSample=-1;
   function update(dt,t){
     for(const mixer of mixers)mixer.update(dt);
+    for(const root of nodes.values())updateMotion(root,t,dt,heightAt);
     for(const relation of fights){
       const pair=relation.subjects.map(id=>nodes.get(id));
       const [a,b]=pair.map(n=>n.userData.base);
@@ -119,7 +131,7 @@ export async function mountGeneratedScene({scene, job, heightAt, colliders}) {
         root.position.x+=Math.cos(t*1.3+i*Math.PI)*.18;
         root.position.y=heightAt(root.position.x,root.position.z)+Math.max(0,Math.sin((phase-2)*Math.PI))*approach*.1;
         root.rotation.y=Math.atan2(toward.x*sign,toward.z*sign);
-        setMoving(root,approach>.05?1:0);
+        setMoving(root,approach>.05?1:0);root.userData.fightApproach=approach;
         const c=root.userData.collider;if(c){c.x=root.position.x;c.z=root.position.z;}
       });
     }
