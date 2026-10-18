@@ -31,7 +31,7 @@ function render(j) {
     old.delete(asset.id);card.querySelector('h3').textContent=asset.name;
     const n=j.plan.instances.filter(i=>i.asset_id===asset.id).length;
     card.querySelector('small').textContent=`${asset.kind==='animal'?'动物':asset.kind==='plant'?'植物':'建筑 / 道具'} / ${asset.height_m}m / 复用 ${n} 次${asset.inferred?' · 场景设计补充':''}`;
-    card.querySelector('p').textContent=status.message;card.querySelector('progress').value=({planned:0,image_running:1,model_submitting:2,model_running:2,downloading:3,ready:4})[status.state]||0;
+    card.querySelector('p').textContent=status.message+(status.rig?` · 动作：${status.rig.message||status.rig.state}`:'');card.querySelector('progress').value=({planned:0,image_running:1,model_submitting:2,model_running:2,downloading:3,ready:4})[status.state]||0;
     const area=card.querySelector('.asset-image');
     if(status.image_url && !area.querySelector('img')){const img=new Image();img.src=status.image_url;img.alt=asset.name+' · GPT 参考图';area.replaceChildren(img);}else if(!status.image_url)area.textContent=asset.id.toUpperCase();
     const reference=card.querySelector('.reference');
@@ -54,5 +54,5 @@ $('external').onclick=async()=>{try{const response=await fetch('/api/open-world'
 $('download').onclick=()=>{const a=document.createElement('a');const url=URL.createObjectURL(new Blob([JSON.stringify(job.plan,null,2)],{type:'application/json'}));a.href=url;a.download='scene-blueprint.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);};
 config=await api('/config');$('conversation').value=config.demo_conversation.join('\n');$('demo').onclick=()=>{$('conversation').value=config.demo_conversation.join('\n');};
 $('config').textContent=`规划：${config.planner_model} · 生图：${config.image_model}。同时生图 ${config.concurrency.images} 个，建模 ${config.concurrency.models} 个。`;
-for(const provider of ['rodin','tripo'])$('provider').querySelector(`[value=${provider}]`).disabled=!config[provider+'_configured'];
+for(const provider of ['rodin','tripo'])$('provider').querySelector(`[value=${provider}]`).disabled=!config[provider+'_configured'];$('provider').querySelector('[value=auto]').disabled=!(config.rodin_configured&&config.tripo_configured);
 await history();await refresh();setInterval(refresh,2500);

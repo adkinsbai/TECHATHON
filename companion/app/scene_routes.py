@@ -27,7 +27,8 @@ def attach_scene_routes(app):
         use_recent_chat: bool = False
 
     class GenerateIn(BaseModel):
-        provider: Literal['rodin', 'tripo'] = 'rodin'
+        # auto：动物走 Tripo（自动绑骨、加动作），植物和建筑走 Rodin。
+        provider: Literal['auto', 'rodin', 'tripo'] = 'auto'
         asset_ids: list[str] | None = Field(default=None, max_length=16)
 
     class ReviseIn(BaseModel):
@@ -133,6 +134,16 @@ def attach_scene_routes(app):
             raise HTTPException(404, '资产尚未就绪。')
         mime = image_mime(file.read_bytes()[:16]) if kind == 'image' else 'model/gltf-binary'
         return FileResponse(file, media_type=mime)
+
+    @router.get('/{job_id}/assets/{asset_id}/clip/{index}')
+    async def clip(job_id: str, asset_id: str, index: int):
+        job = job_for(job_id)
+        if asset_id not in job.get('assets', {}) or not 0 <= index < 8:
+            raise HTTPException(404, '没有这个动作文件。')
+        file = studio.directory / job_id / f'{asset_id}.clip{index}.glb'
+        if not file.is_file():
+            raise HTTPException(404, '动作文件尚未就绪。')
+        return FileResponse(file, media_type='model/gltf-binary')
 
     @app.get('/world-studio')
     async def studio_page():

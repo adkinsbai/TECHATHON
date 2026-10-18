@@ -98,10 +98,14 @@ function outlineMaterial(thickness) {
   return material;
 }
 
-function outlineGeometry(geometry) {
-  // 只用位置做描边壳；合并重合顶点后算平滑法线，硬边处才不会裂缝。
+function outlineGeometry(geometry, skinned) {
+  // 只用位置（绑骨模型再加蒙皮权重）做描边壳；合并重合顶点后算平滑法线，硬边处才不会裂缝。
   const shell = new THREE.BufferGeometry();
   shell.setAttribute('position', geometry.getAttribute('position'));
+  if (skinned) {
+    shell.setAttribute('skinIndex', geometry.getAttribute('skinIndex'));
+    shell.setAttribute('skinWeight', geometry.getAttribute('skinWeight'));
+  }
   if (geometry.index) shell.setIndex(geometry.index);
   const merged = mergeVertices(shell, 1e-4);
   merged.computeVertexNormals();
@@ -132,10 +136,14 @@ export function toonify(root, {heightM, tintHex = '#f2a65a', outline = true} = {
   if (!outline || triangles > TOON.maxOutlineTriangles) return {triangles, outlined: false};
   const scale = new THREE.Vector3();
   for (const mesh of meshes) {
-    if (mesh.isSkinnedMesh || mesh.isInstancedMesh) continue;
+    if (mesh.isInstancedMesh) continue;
+    const skinned = mesh.isSkinnedMesh && mesh.geometry.getAttribute('skinIndex') && mesh.geometry.getAttribute('skinWeight');
     mesh.getWorldScale(scale);
     const local = thicknessM / Math.max(1e-6, (Math.abs(scale.x) + Math.abs(scale.y) + Math.abs(scale.z)) / 3);
-    const shell = new THREE.Mesh(outlineGeometry(mesh.geometry), outlineMaterial(local));
+    const geometry = outlineGeometry(mesh.geometry, skinned), material = outlineMaterial(local);
+    // 绑骨模型：描边壳也是蒙皮网格，绑到同一副骨骼，动作时跟着一起变形。
+    const shell = skinned ? new THREE.SkinnedMesh(geometry, material) : new THREE.Mesh(geometry, material);
+    if (skinned) { shell.bindMode = mesh.bindMode; shell.bind(mesh.skeleton, mesh.bindMatrix); shell.frustumCulled = false; }
     shell.userData.toonOutline = true;
     shell.castShadow = false; shell.receiveShadow = false;
     shell.raycast = () => {};

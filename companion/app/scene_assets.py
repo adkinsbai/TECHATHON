@@ -18,6 +18,33 @@ from . import config
 from .scene_plan import ScenePlan, plan_conversation, world_recipe
 
 
+TRIPO_BASE = 'https://openapi.tripo3d.ai/v3'
+# v2.5 绑骨对非人形生物提供一套通用动作；默认取待机和走路。可用 TRIPO_ANIMATIONS=preset:idle,preset:walk 覆盖。
+DEFAULT_ANIMATIONS = ('preset:idle', 'preset:walk')
+RIG_TERMINAL = ('ready', 'failed', 'skipped', 'unknown')
+
+
+def task_model_urls(output):
+    """retarget 可能返回一个含全部动作的 GLB，也可能每个动作一个；统一成 [(名字, 地址)]。"""
+    urls = output.get('model_urls')
+    if isinstance(urls, dict):
+        return [(str(k), v) for k, v in urls.items() if isinstance(v, str)]
+    if isinstance(urls, list):
+        result = []
+        for index, item in enumerate(urls):
+            if isinstance(item, str):
+                result.append((str(index), item))
+            elif isinstance(item, dict) and (item.get('url') or item.get('model_url')):
+                result.append((str(item.get('animation') or item.get('name') or index),
+                               item.get('url') or item.get('model_url')))
+        return result
+    return [('model', output['model_url'])] if isinstance(output.get('model_url'), str) else []
+
+
+def clip_name(name):
+    return str(name).split(':')[-1].strip() or 'clip'
+
+
 def settings_from_local():
     settings = {}
     # Only an ignored local pointer is stored in the checkout; credentials stay
@@ -31,7 +58,7 @@ def settings_from_local():
                 if sep and not key.startswith('#'):
                     settings[key] = value.strip().strip('\"\'')
     for key in ('OPENAI_API_KEY', 'OPENAI_BASE_URL', 'OPENAI_IMAGE_MODEL', 'RODIN_API_KEY',
-                'TRIPO_API_KEY', 'TRIPO_PROXY_URL', 'SCENE_PLANNER_API_KEY',
+                'TRIPO_API_KEY', 'TRIPO_PROXY_URL', 'TRIPO_ANIMATIONS', 'SCENE_PLANNER_API_KEY',
                 'SCENE_PLANNER_BASE_URL', 'SCENE_PLANNER_MODEL'):
         if key in os.environ:
             settings[key] = os.environ[key]
@@ -128,7 +155,7 @@ class Providers:
             if data.get('error') not in (None, 'OK') or not data.get('uuid') or not data.get('jobs', {}).get('subscription_key'):
                 raise UnknownSubmission('Rodin 未返回完整任务编号；请先检查服务商记录。')
             return {'id': data['uuid'], 'subscription': data['jobs']['subscription_key']}
-        base = 'https://openapi.tripo3d.ai/v3'
+        base = TRIPO_BASE
         proxy = self.settings.get('TRIPO_PROXY_URL') or None
         upload = await self.request(base, '/files', self.settings.get('TRIPO_API_KEY'), proxy=proxy,
                                    files=[('file', ('reference.jpg', image, image_mime(image)))])
@@ -157,7 +184,7 @@ class Providers:
                     raise RuntimeError('Rodin 任务完成，但没有 GLB 文件。')
                 return file['url']
             return None
-        data = await self.request('https://openapi.tripo3d.ai/v3', '/tasks/' + upstream['id'],
+        data = await self.request(TRIPO_BASE, '/tasks/' + upstream['id'],
             self.settings.get('TRIPO_API_KEY'), method='GET', proxy=self.settings.get('TRIPO_PROXY_URL') or None)
         task = data.get('data', {})
         if task.get('status') in ('failed', 'cancelled', 'expired'):
@@ -168,6 +195,47 @@ class Providers:
                 raise RuntimeError('Tripo 任务缺少 GLB 结果。')
             return url
         return None
+
+    # ---------- Tripo 绑骨与动作：rig-check → rig → retarget，每步用上一步的任务编号作 input ----------
+    async def tripo(self, path, body=None, method='POST'):
+        return await self.request(TRIPO_BASE, path, self.settings.get('TRIPO_API_KEY'), method=method, body=body,
+                                  proxy=self.settings.get('TRIPO_PROXY_URL') or None)
+
+    async def tripo_task(self, task_id):
+        """进行中返回 None；成功返回 output；失败抛错。"""
+        data = await self.tripo('/tasks/' + task_id, method='GET')
+        task = data.get('data', {})
+        if task.get('status') in ('failed', 'cancelled', 'expired', 'banned'):
+            raise RuntimeError('Tripo 任务失败：' + str(task.get('status')))
+        return (task.get('output') or {}) if task.get('status') == 'success' else None
+
+    async def rig_check(self, model_task_id):
+        """免费检查。文档示例是直接返回 rig_type；若返回任务编号则交给调用方轮询。"""
+        data = await self.tripo('/animations/rig-check', {'input': model_task_id})
+        if data.get('code') != 0:
+            raise RuntimeError('Tripo 绑骨检查失败：' + str(data.get('message') or data.get('code')))
+        result = data.get('data', {})
+        if 'rig_type' in result or 'riggable' in result:
+            return {'riggable': result.get('riggable', True), 'rig_type': result.get('rig_type')}
+        if result.get('task_id'):
+            return {'task_id': result['task_id']}
+        raise RuntimeError('Tripo 绑骨检查没有返回结果。')
+
+    async def rig_submit(self, model_task_id, rig_type):
+        data = await self.tripo('/animations/rig', {'input': model_task_id, 'rig_type': rig_type,
+                                                    'spec': 'tripo', 'out_format': 'glb'})
+        task = data.get('data', {}).get('task_id')
+        if data.get('code') != 0 or not task:
+            raise UnknownSubmission('Tripo 绑骨未返回任务编号；请先检查服务商记录。')
+        return task
+
+    async def retarget_submit(self, rig_task_id, animations):
+        data = await self.tripo('/animations/retarget', {'input': rig_task_id, 'animations': animations,
+                                                         'out_format': 'glb'})
+        task = data.get('data', {}).get('task_id')
+        if data.get('code') != 0 or not task:
+            raise UnknownSubmission('Tripo 动作重定向未返回任务编号；请先检查服务商记录。')
+        return task
 
     async def download(self, url):
         # Use a fresh client without provider Authorization on signed CDN URLs.
@@ -205,6 +273,7 @@ class SceneStudio:
         self.providers = providers or Providers(self.settings)
         self.jobs, self.tasks = {}, {}
         self.image_slots, self.model_slots = asyncio.Semaphore(2), asyncio.Semaphore(3)
+        self.poll_seconds = 10
         for file in self.directory.glob('*/job.json'):
             job = json.loads(file.read_text(encoding='utf-8'))
             for asset in job.get('assets', {}).values():
@@ -303,25 +372,38 @@ class SceneStudio:
             job.update(state='partial', error=str(exc) if isinstance(exc, RuntimeError) else '修订结构无效，已有场景保留。')
         self.save(job)
 
+    @staticmethod
+    def provider_for(kind, provider):
+        # auto：动物用 Tripo（之后能自动绑骨、加动作），植物和建筑用 Rodin。
+        return ('tripo' if kind == 'animal' else 'rodin') if provider == 'auto' else provider
+
+    def needs_rig(self, kind, record):
+        return (kind == 'animal' and record.get('provider') == 'tripo' and record.get('upstream')
+                and self.settings.get('TRIPO_API_KEY') and self.settings.get('TRIPO_RIG', '1') != '0')
+
     def start(self, job, provider='rodin', asset_ids=None):
         if job['id'] in self.tasks:
             raise ValueError('场景已有任务运行。')
         if not job.get('plan'):
             raise ValueError('请先完成场景规划。')
-        key = 'RODIN_API_KEY' if provider == 'rodin' else 'TRIPO_API_KEY'
-        if not self.settings.get(key) or not self.settings.get('OPENAI_API_KEY'):
-            raise ValueError('请先配置图像服务和所选 3D 服务密钥。')
         ids = list(job['assets']) if asset_ids is None else list(dict.fromkeys(asset_ids))
         if any(i not in job['assets'] for i in ids):
             raise ValueError('资产编号无效。')
+        kinds = {a['id']: a['kind'] for a in job['plan']['assets']}
+        wanted = {self.provider_for(kinds.get(i), provider) for i in ids
+                  if job['assets'][i]['state'] not in ('ready', 'unknown') and not job['assets'][i].get('upstream')}
+        missing = [p for p in wanted if not self.settings.get('RODIN_API_KEY' if p == 'rodin' else 'TRIPO_API_KEY')]
+        if missing or (wanted and not self.settings.get('OPENAI_API_KEY')):
+            raise ValueError('请先配置图像服务和所选 3D 服务密钥（' + '、'.join(sorted(missing) or ['图像服务']) + '）。')
         for asset_id in ids:
             asset = job['assets'][asset_id]
             if asset['state'] in ('ready', 'unknown'):
                 continue  # Never resubmit an ambiguous paid request.
-            if asset.get('provider') and asset['provider'] != provider and asset.get('upstream'):
+            chosen = self.provider_for(kinds.get(asset_id), provider)
+            if asset.get('provider') and asset['provider'] != chosen and asset.get('upstream'):
                 raise ValueError('已有上游任务不能切换服务商；请继续查询原任务。')
             if not asset.get('upstream'):
-                asset['provider'] = provider
+                asset['provider'] = chosen
         job['state'] = 'generating'
         self.save(job)
         self.track(job, self.produce(job, ids))
@@ -334,10 +416,15 @@ class SceneStudio:
 
     async def produce_asset(self, job, asset_id):
         record = job['assets'][asset_id]
-        if record['state'] in ('ready', 'unknown'):
-            return
         asset = next(a for a in ScenePlan.model_validate(job['plan']).assets if a.id == asset_id)
         folder = self.directory / job['id']
+        if record['state'] == 'ready':
+            # 静态模型已就绪；动物的绑骨/动作若中断过，只继续查询原任务。
+            if self.needs_rig(asset.kind, record) and record.get('rig', {}).get('state') not in RIG_TERMINAL:
+                await self.rig_asset(job, asset_id, record, folder)
+            return
+        if record['state'] == 'unknown':
+            return
         image_file = folder / (asset_id + '.image')
         try:
             if not image_file.exists():
@@ -383,13 +470,96 @@ class SceneStudio:
                 record.update(state='ready', message='资产已就绪，可导入世界', model_finished_at=time.time(),
                     model_sha256=hashlib.sha256(model).hexdigest(), model_bytes=len(model),
                     model_url=f'/api/scene-studio/{job["id"]}/assets/{asset_id}/model')
+                self.save(job)
+            if self.needs_rig(asset.kind, record):
+                await self.rig_asset(job, asset_id, record, folder)
         except asyncio.CancelledError:
-            record.update(state='interrupted' if record.get('upstream') else 'unknown', message='应用退出，任务状态已保留。')
+            if record.get('state') != 'ready':   # 绑骨阶段退出时静态模型仍然可用
+                record.update(state='interrupted' if record.get('upstream') else 'unknown', message='应用退出，任务状态已保留。')
             raise
         except UnknownSubmission as exc:
             record.update(state='unknown', message=str(exc))
         except Exception as exc:
             record.update(state='interrupted' if record.get('upstream') else 'failed',
                           message=str(exc) if isinstance(exc, (RuntimeError, ValueError)) else '生成失败，已有结果已保留。')
+        finally:
+            self.save(job)
+
+    async def wait_tripo(self, task_id):
+        deadline, failures = time.monotonic() + 3600, 0
+        while True:
+            try:
+                output = await self.providers.tripo_task(task_id)
+                failures = 0
+            except httpx.HTTPError:
+                failures += 1
+                if failures >= 5:
+                    raise RuntimeError('查询暂不可用，任务编号已保存；点击继续查询，不会重新提交。') from None
+                output = None
+            if output is not None:
+                return output
+            if time.monotonic() > deadline:
+                raise RuntimeError('任务仍未完成，已保留编号；稍后继续查询。')
+            await asyncio.sleep(self.poll_seconds)
+
+    async def rig_asset(self, job, asset_id, record, folder):
+        """Tripo：检查 → 绑骨 → 套动作 → 下载带骨骼动画的 GLB。失败只影响动作，静态模型照常可用。
+        每一步的任务编号都先存盘；提交结果不明时标记 unknown，绝不自动重发付费请求。"""
+        rig = record.setdefault('rig', {'state': 'pending'})
+        if rig.get('state') in RIG_TERMINAL:
+            return
+        configured = self.settings.get('TRIPO_ANIMATIONS', '')
+        animations = [a.strip() for a in configured.split(',') if a.strip()] or list(DEFAULT_ANIMATIONS)
+        try:
+            async with self.model_slots:
+                if not rig.get('rig_type'):
+                    rig.update(state='checking', message='Tripo 正在检查能否绑骨')
+                    self.save(job)
+                    check = await self.providers.rig_check(record['upstream']['id'])
+                    if 'task_id' in check:
+                        check = await self.wait_tripo(check['task_id'])
+                    if check.get('riggable') is False or not check.get('rig_type'):
+                        rig.update(state='skipped', message='Tripo 判断这个模型不适合绑骨，使用静态模型。')
+                        return
+                    rig['rig_type'] = check['rig_type']
+                    self.save(job)
+                if not rig.get('rig_task'):
+                    rig.update(state='rigging', message=f'正在自动绑骨（{rig["rig_type"]}）')
+                    self.save(job)
+                    rig['rig_task'] = await self.providers.rig_submit(record['upstream']['id'], rig['rig_type'])
+                    self.save(job)
+                rig.update(state='rigging', message=f'正在自动绑骨（{rig["rig_type"]}）')
+                self.save(job)
+                await self.wait_tripo(rig['rig_task'])
+                if not rig.get('retarget_task'):
+                    rig.update(state='animating', message='正在套用动作：' + '、'.join(map(clip_name, animations)))
+                    self.save(job)
+                    rig['animations'] = animations
+                    rig['retarget_task'] = await self.providers.retarget_submit(rig['rig_task'], animations)
+                    self.save(job)
+                rig.update(state='animating', message='正在套用动作：' + '、'.join(map(clip_name, rig['animations'])))
+                self.save(job)
+                output = await self.wait_tripo(rig['retarget_task'])
+                files = task_model_urls(output)
+                if not files:
+                    raise RuntimeError('动作任务完成，但没有返回 GLB。')
+                rig.update(state='downloading', message='正在保存带动作的模型')
+                self.save(job)
+                clips = []
+                for index, (name, url) in enumerate(files[:8]):
+                    model = await self.providers.download(url)
+                    validate_glb(model)
+                    (folder / f'{asset_id}.clip{index}.glb').write_bytes(model)
+                    label = name if not name.isdigit() else (rig['animations'][index] if index < len(rig['animations']) else name)
+                    clips.append({'name': clip_name(label), 'sha256': hashlib.sha256(model).hexdigest(),
+                                  'url': f'/api/scene-studio/{job["id"]}/assets/{asset_id}/clip/{index}'})
+                rig.update(state='ready', clips=clips, message='已绑骨并带动作：' + '、'.join(c['name'] for c in clips))
+        except asyncio.CancelledError:
+            rig.update(state='interrupted', message='应用退出，绑骨任务编号已保留。')
+            raise
+        except UnknownSubmission as exc:
+            rig.update(state='unknown', message=str(exc))
+        except Exception as exc:
+            rig.update(state='failed', message=('绑骨或动作失败，使用静态模型：' + str(exc))[:300])
         finally:
             self.save(job)
