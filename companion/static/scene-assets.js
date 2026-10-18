@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import {GLTFLoader} from '/static/vendor/GLTFLoader.js';
 import {textSprite} from '/static/worldgen.js?v=2';
-import {toonify, contactShadow} from '/static/toonify.js?v=3';
+import {toonify, contactShadow} from '/static/toonify.js?v=5';
 
 // 默认按绘本卡通风格处理生成的模型；地址加 ?style=pbr 可看原始写实材质做对比。
 const TOON_ON = new URLSearchParams(location.search).get('style') !== 'pbr';

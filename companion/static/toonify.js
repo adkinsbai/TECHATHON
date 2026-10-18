@@ -13,8 +13,8 @@ gradient.needsUpdate = true;
 
 export const TOON = {
   outlineColor: 0x5b4337,   // 暖棕，比纯黑柔和
-  outlineRatio: 0.012,      // 描边粗细 = 资产高度 × 比例，限制在下面的范围
-  outlineMin: 0.02, outlineMax: 0.07,
+  outlinePx: 1.6,           // 描边在屏幕上的像素宽度（与远近无关）
+  viewportHeight: () => (globalThis.innerHeight || 900) * (globalThis.devicePixelRatio || 1),
   textureSize: 192,         // 贴图缩到这么大再用，抹掉写实细节
   lift: 0.16,               // 暗部提亮（0 不变，1 全白）
   saturation: 1.12,
@@ -86,15 +86,31 @@ function toonMaterial(source, tint) {
   return material;
 }
 
-function outlineMaterial(thickness) {
+// 描边按屏幕像素定宽：近看不会变成粗棕边，远看也不会消失。所有描边共用一个材质/着色器。
+let sharedOutline = null;
+function outlineMaterial() {
+  if (sharedOutline) return sharedOutline;
   const material = new THREE.MeshBasicMaterial({color: TOON.outlineColor, side: THREE.BackSide});
   material.onBeforeCompile = (shader) => {
-    shader.uniforms.uOutline = {value: thickness};
-    shader.vertexShader = 'uniform float uOutline;\n' + shader.vertexShader.replace(
-      '#include <begin_vertex>', '#include <begin_vertex>\ntransformed += normalize(normal) * uOutline;');
+    shader.uniforms.uOutlinePx = {value: TOON.outlinePx};
+    shader.uniforms.uViewportH = {value: TOON.viewportHeight()};
+    material.userData.shader = shader;
+    shader.vertexShader = 'uniform float uOutlinePx;\nuniform float uViewportH;\n' + shader.vertexShader.replace(
+      '#include <project_vertex>',
+      `#include <project_vertex>
+      vec3 outlineN = normalize(normalMatrix * normal);
+      vec2 outlineDir = (projectionMatrix * vec4(outlineN, 0.0)).xy;
+      if (dot(outlineDir, outlineDir) > 1e-8) {
+        outlineDir = normalize(outlineDir);
+        outlineDir.x *= projectionMatrix[0][0] / projectionMatrix[1][1];   // 横竖同样像素宽
+        gl_Position.xy += outlineDir * (2.0 * uOutlinePx / uViewportH) * gl_Position.w;
+      }`);
   };
-  // 每个描边粗细不同，避免共用同一个编译后的程序时串值。
-  material.customProgramCacheKey = () => 'toon-outline-' + thickness.toFixed(5);
+  material.onBeforeRender = () => {
+    if (material.userData.shader) material.userData.shader.uniforms.uViewportH.value = TOON.viewportHeight();
+  };
+  material.customProgramCacheKey = () => 'toon-outline-screen-v1';
+  sharedOutline = material;
   return material;
 }
 
@@ -124,7 +140,6 @@ export function toonify(root, {heightM, tintHex = '#f2a65a', outline = true} = {
     return materials.get(m);
   };
   root.updateMatrixWorld(true);
-  const thicknessM = THREE.MathUtils.clamp(heightM * TOON.outlineRatio, TOON.outlineMin, TOON.outlineMax);
   const meshes = [];
   root.traverse((o) => { if (o.isMesh && !o.userData.toonOutline) meshes.push(o); });
   let triangles = 0;
@@ -134,13 +149,10 @@ export function toonify(root, {heightM, tintHex = '#f2a65a', outline = true} = {
     triangles += (mesh.geometry.index ? mesh.geometry.index.count : mesh.geometry.getAttribute('position').count) / 3;
   }
   if (!outline || triangles > TOON.maxOutlineTriangles) return {triangles, outlined: false};
-  const scale = new THREE.Vector3();
   for (const mesh of meshes) {
     if (mesh.isInstancedMesh) continue;
     const skinned = mesh.isSkinnedMesh && mesh.geometry.getAttribute('skinIndex') && mesh.geometry.getAttribute('skinWeight');
-    mesh.getWorldScale(scale);
-    const local = thicknessM / Math.max(1e-6, (Math.abs(scale.x) + Math.abs(scale.y) + Math.abs(scale.z)) / 3);
-    const geometry = outlineGeometry(mesh.geometry, skinned), material = outlineMaterial(local);
+    const geometry = outlineGeometry(mesh.geometry, skinned), material = outlineMaterial();
     // 绑骨模型：描边壳也是蒙皮网格，绑到同一副骨骼，动作时跟着一起变形。
     const shell = skinned ? new THREE.SkinnedMesh(geometry, material) : new THREE.Mesh(geometry, material);
     if (skinned) { shell.bindMode = mesh.bindMode; shell.bind(mesh.skeleton, mesh.bindMatrix); shell.frustumCulled = false; }

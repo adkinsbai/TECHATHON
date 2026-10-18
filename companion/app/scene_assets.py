@@ -24,6 +24,16 @@ DEFAULT_ANIMATIONS = ('preset:idle', 'preset:walk')
 RIG_TERMINAL = ('ready', 'failed', 'skipped', 'unknown')
 
 
+# Clash / Surge 等代理的 TUN“fake-ip”模式把所有域名解析到 198.18.0.0/15（RFC 2544 测试保留段，
+# 不会是真实内网）。开着这种代理的电脑上，服务商的下载域名也会落在这里；只额外放行这一段，其余非公网地址仍拒绝。
+PROXY_FAKE_IP = ipaddress.ip_network('198.18.0.0/15')
+
+
+def download_address_allowed(address):
+    ip = ipaddress.ip_address(address)
+    return ip.is_global or ip in PROXY_FAKE_IP
+
+
 def task_model_urls(output):
     """retarget 可能返回一个含全部动作的 GLB，也可能每个动作一个；统一成 [(名字, 地址)]。"""
     urls = output.get('model_urls')
@@ -245,7 +255,7 @@ class Providers:
                 if parsed.scheme != 'https' or not parsed.hostname or parsed.username or parsed.password:
                     raise RuntimeError('模型下载地址无效。')
                 addresses = await asyncio.get_running_loop().getaddrinfo(parsed.hostname, 443, type=socket.SOCK_STREAM)
-                if not addresses or any(not ipaddress.ip_address(a[4][0]).is_global for a in addresses):
+                if not addresses or any(not download_address_allowed(a[4][0]) for a in addresses):
                     raise RuntimeError('拒绝从非公网地址下载模型。')
                 async with client.stream('GET', url, timeout=180) as response:
                     if response.is_redirect:

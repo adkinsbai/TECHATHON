@@ -172,3 +172,13 @@ class TripoProtocolTests(unittest.IsolatedAsyncioTestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class DownloadAddressTests(unittest.TestCase):
+    def test_proxy_fake_ip_range_is_allowed_but_private_networks_are_not(self):
+        from app.scene_assets import download_address_allowed
+        self.assertTrue(download_address_allowed('198.18.0.25'))
+        self.assertTrue(download_address_allowed('198.19.255.1'))
+        self.assertTrue(download_address_allowed('8.8.8.8'))
+        for address in ('127.0.0.1', '10.0.0.5', '192.168.137.1', '172.16.0.1', '169.254.1.1', '100.64.0.1', '::1'):
+            self.assertFalse(download_address_allowed(address), address)
