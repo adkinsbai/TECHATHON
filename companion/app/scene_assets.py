@@ -277,9 +277,11 @@ class Providers:
 
 
 class SceneStudio:
-    def __init__(self, directory, settings=None, providers=None):
+    def __init__(self, directory, settings=None, providers=None, demo_directory=None):
         self.directory = Path(directory)
         self.directory.mkdir(parents=True, exist_ok=True)
+        # 仓库自带的只读示例场景（companion/demos/scenes/*），别人克隆后不用密钥也能进入
+        self.demo_folders = {}
         self.settings = settings if settings is not None else settings_from_local()
         self.providers = providers or Providers(self.settings)
         self.jobs, self.tasks = {}, {}
@@ -297,8 +299,23 @@ class SceneStudio:
             elif job.get('state') == 'generating':
                 job['state'] = 'partial'
             self.jobs[job['id']] = job
+        self.load_demos(demo_directory)
+
+    def folder(self, job_id):
+        return self.demo_folders.get(job_id) or self.directory / job_id
+
+    def load_demos(self, demo_directory):
+        for file in sorted(Path(demo_directory).glob('*/job.json')) if demo_directory else []:
+            job = json.loads(file.read_text(encoding='utf-8'))
+            if not str(job.get('id', '')).startswith('demo-') or job['id'] in self.jobs:
+                continue
+            job['demo'] = True
+            self.demo_folders[job['id']] = file.parent
+            self.jobs[job['id']] = job
 
     def save(self, job):
+        if job.get('demo'):
+            return   # 示例只读，不写回仓库
         folder = self.directory / job['id']
         folder.mkdir(exist_ok=True)
         temporary = folder / 'job.tmp'
@@ -348,6 +365,8 @@ class SceneStudio:
         self.save(job)
 
     def revise(self, job, changes, regenerate_ids):
+        if job.get('demo'):
+            raise ValueError('这是仓库自带的示例场景，不能修订；用同样的对话新建场景即可。')
         if job['id'] in self.tasks or not job.get('plan'):
             raise ValueError('请等待当前任务完成后修订。')
         if any(i not in job['assets'] for i in regenerate_ids):
@@ -365,7 +384,7 @@ class SceneStudio:
             old_assets = job['assets']
             if not set(old_assets).issubset({a.id for a in plan.assets}):
                 raise ValueError('修订不能丢弃已有资产。')
-            folder = self.directory / job['id']
+            folder = self.folder(job['id'])
             revision = folder / 'revisions' / str(time.time_ns())
             revision.mkdir(parents=True)
             (revision / 'plan.json').write_text(json.dumps(old_plan, ensure_ascii=False), encoding='utf-8')
@@ -394,6 +413,8 @@ class SceneStudio:
                 and self.settings.get('TRIPO_API_KEY') and self.settings.get('TRIPO_RIG', '1') != '0')
 
     def start(self, job, provider='rodin', asset_ids=None):
+        if job.get('demo'):
+            raise ValueError('这是仓库自带的示例场景，只能进入游玩；用同样的对话新建场景即可重新生成。')
         if job['id'] in self.tasks:
             raise ValueError('场景已有任务运行。')
         if not job.get('plan'):
@@ -429,7 +450,7 @@ class SceneStudio:
     async def produce_asset(self, job, asset_id):
         record = job['assets'][asset_id]
         asset = next(a for a in ScenePlan.model_validate(job['plan']).assets if a.id == asset_id)
-        folder = self.directory / job['id']
+        folder = self.folder(job['id'])
         if record['state'] == 'ready':
             # 静态模型已就绪；动物的绑骨/动作若中断过，只继续查询原任务。
             if self.needs_rig(asset.kind, record) and record.get('rig', {}).get('state') not in RIG_TERMINAL:

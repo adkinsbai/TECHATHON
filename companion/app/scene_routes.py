@@ -13,7 +13,7 @@ from .scene_plan import ZOO_CONVERSATION
 
 
 def attach_scene_routes(app):
-    studio = SceneStudio(config.HOME / 'world-studio')
+    studio = SceneStudio(config.HOME / 'world-studio', demo_directory=config.ROOT / 'demos' / 'scenes')
 
     async def local_origin(request: Request):
         origin = request.headers.get('origin')
@@ -36,7 +36,7 @@ def attach_scene_routes(app):
         regenerate_asset_ids: list[str] = Field(default_factory=list, max_length=16)
 
     class OpenWorldIn(BaseModel):
-        scene_id: str | None = Field(default=None, pattern=r'^[a-f0-9]{32}$')
+        scene_id: str | None = Field(default=None, pattern=r'^([a-f0-9]{32}|demo-[a-z0-9-]{2,32})$')
         chapter: str = Field(default='cabin', pattern=r'^(cabin|voyage|w[0-9]+)$')
 
     @app.post('/api/open-world', dependencies=[Depends(local_origin)])
@@ -68,7 +68,10 @@ def attach_scene_routes(app):
 
     @router.get('')
     async def list_jobs():
-        return [studio.public(job) for job in reversed(list(studio.jobs.values()))]
+        # 自己生成的场景在前（新的在最前），仓库自带的示例在后
+        jobs = list(studio.jobs.values())
+        own = sorted((j for j in jobs if not j.get('demo')), key=lambda j: j.get('created_at', 0), reverse=True)
+        return [studio.public(job) for job in own + [j for j in jobs if j.get('demo')]]
 
     @router.post('/plan')
     async def create_plan(body: PlanIn):
@@ -119,6 +122,8 @@ def attach_scene_routes(app):
             image_mime(data)
         except ValueError as exc:
             raise HTTPException(422, str(exc)) from None
+        if job.get('demo'):
+            raise HTTPException(409, '示例场景只读。')
         (studio.directory / job_id / (asset_id + '.reference')).write_bytes(data)
         job['assets'][asset_id]['has_reference'] = True
         studio.save(job)
@@ -129,7 +134,7 @@ def attach_scene_routes(app):
         job = job_for(job_id)
         if asset_id not in job.get('assets', {}):
             raise HTTPException(404, '没有这个资产。')
-        file = studio.directory / job_id / (asset_id + ('.image' if kind == 'image' else '.glb'))
+        file = studio.folder(job_id) / (asset_id + ('.image' if kind == 'image' else '.glb'))
         if not file.is_file():
             raise HTTPException(404, '资产尚未就绪。')
         mime = image_mime(file.read_bytes()[:16]) if kind == 'image' else 'model/gltf-binary'
@@ -140,7 +145,7 @@ def attach_scene_routes(app):
         job = job_for(job_id)
         if asset_id not in job.get('assets', {}) or not 0 <= index < 8:
             raise HTTPException(404, '没有这个动作文件。')
-        file = studio.directory / job_id / f'{asset_id}.clip{index}.glb'
+        file = studio.folder(job_id) / f'{asset_id}.clip{index}.glb'
         if not file.is_file():
             raise HTTPException(404, '动作文件尚未就绪。')
         return FileResponse(file, media_type='model/gltf-binary')

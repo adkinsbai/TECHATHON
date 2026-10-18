@@ -32,6 +32,10 @@
 - 扬声器默认 **10% PCM 振幅**，0% 静音；24kHz、16-bit、双声道播放。当前硬件半双工，播放时不录音，再次按压可打断。
 - 实体在线时接管自动语音，网页保留同一份文字和表情。录音上限 15 秒；断线丢弃未完成录音和旧语音。
 
+## 由对话生成的世界（自带示例）
+
+梦幻世界开始页 `http://127.0.0.1:8765/world` 下方的“由对话生成的世界”列出每个由对话生成的 3D 世界、它来自的那段对话和进入按钮。仓库自带一个完整示例（三句动物园对话 → 绘本卡通动物园，`companion/demos/scenes/zoo/`），不需要任何密钥就能进入：`/world?scene=demo-zoo`。自己生成世界的流程、所需密钥和导出示例的方法见 [docs/SCENE-STUDIO.md](docs/SCENE-STUDIO.md)。
+
 ## 团队测试版（Xiaonuan.exe，免装 Python）
 
 最新的压缩包始终在 GitHub Release [team-test-latest](https://github.com/tjusaltedfish/TECHATHON/releases/tag/team-test-latest)（约 200MB，超过 Git 单文件上限，所以不提交进仓库）。测试电脑只需下载解压 `Xiaonuan-team-test.zip`，打开 Windows 移动热点（2.4GHz），双击 `Xiaonuan.exe`，在自动打开的 `http://127.0.0.1:8765/setup` 页填 DeepSeek 密钥、一键放行防火墙，等板子变绿即可。压缩包内置 Python 3.12、依赖和 SenseVoice 识别模型；聊天数据和密钥保存在 `%APPDATA%\Xiaonuan`，不在程序目录里。详细步骤见 [packaging/README-team-test.txt](packaging/README-team-test.txt)。

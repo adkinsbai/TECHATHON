@@ -10,7 +10,7 @@ function text(tag, value, className) {const el=document.createElement(tag);el.te
 function showError(e) {$('error').textContent=e.message;}
 async function history() {
   const jobs=await api(''); $('history').replaceChildren();
-  for (const j of jobs.slice(0,8)) {const button=text('button',(j.plan?.title || '正在整理故事')+' · '+j.ready_count+'/'+j.asset_count);button.onclick=()=>{selected=j.id;window.history.replaceState({},'',`?scene=${j.id}`);$('assets').replaceChildren();refresh();};$('history').append(button);}
+  for (const j of jobs.slice(0,8)) {const button=text('button',(j.demo?'示例 · ':'')+(j.plan?.title || '正在整理故事')+' · '+j.ready_count+'/'+j.asset_count);button.onclick=()=>{selected=j.id;window.history.replaceState({},'',`?scene=${j.id}`);$('assets').replaceChildren();refresh();};$('history').append(button);}
 }
 function render(j) {
   job=j;$('state').textContent=states[j.state]||j.state;$('error').textContent=j.error||'';
@@ -20,7 +20,9 @@ function render(j) {
   $('enter').hidden=!j.plan;$('enter').href=j.world_url;$('enter').textContent=j.ready_count===j.asset_count?'进入这个世界 ↗':`预览布局 · ${j.ready_count}/${j.asset_count} 就绪 ↗`;
   $('external').hidden=!j.plan;
   if(!j.plan)return;
-  $('revision-controls').hidden=false;$('revise').disabled=j.running;
+  // 仓库自带的示例只读：可以进入、看对话和规划，但不能重新生成或修订（不花钱也不会改动仓库）
+  $('revision-controls').hidden=!!j.demo;$('revise').disabled=j.running||!!j.demo;
+  if(j.demo){$('generate').disabled=true;$('generate').textContent='示例场景（只读）· 已包含全部模型';}
   $('scene-title').textContent=j.plan.title;$('summary').textContent=j.plan.summary;
   $('counts').replaceChildren();for(const [n,label] of [[j.asset_count,'类独立资产'],[j.plan.instances.length,'个场景实例'],[j.plan.relations.length,'组故事关系']]){const el=text('span',label);el.prepend(text('strong',n));$('counts').append(el);}
   $('schema').hidden=false;$('download').hidden=false;$('json').textContent=JSON.stringify(j.plan,null,2);

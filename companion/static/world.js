@@ -5,6 +5,7 @@ import * as WG from "/static/worldgen.js?v=2";
 import { loadCharacter, CHARACTER } from "/static/character.js?v=2";
 import { mountGeneratedScene } from '/static/scene-assets.js?v=4';
 import { createSite } from '/static/site.js?v=2';
+import { renderDialogWorlds } from '/static/dialog-worlds.js?v=1';
 import { inputCode } from '/static/world-input.js';
 
 // 伙伴的 3D 模型（噜噜）；加载失败就退回程序画的小猫
@@ -2247,6 +2248,7 @@ if (GEN) {
 updateCamera(0);
 renderer.compile(scene, camera);
 loadChapters();
+renderDialogWorlds($("dialogWorlds"), BOOT.scene);
 // 调试用：在控制台里 __world.teleport(x, z, 朝向) 可以瞬移
 window.__world = {
   generatedAssets, colliders: treeColliders,

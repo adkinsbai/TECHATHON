@@ -1,0 +1,705 @@
+{
+  "id": "demo-zoo",
+  "created_at": 1792288297.3085103,
+  "state": "ready",
+  "conversation": [
+    "噜噜，我今天去动物园玩了，里面好大、好多树",
+    "我看到了好多动物有大猩猩、大象、大熊猫、树上还有鹦鹉",
+    "甚至还有两只老虎打起来了"
+  ],
+  "plan": {
+    "schema_version": "1.0",
+    "title": "动物园探索场景",
+    "summary": "一个可漫步的卡通动物园，包含大猩猩、大象、熊猫、鹦鹉和两只老虎的展区，以及入口、休息亭和动物庇护所。",
+    "style": "温馨故事书卡通风格，柔和圆润的简化造型，大面积干净色块，温暖柔和的粉彩色调，极少细节，友好的比例，动物特征清晰可辨。",
+    "quotes": [
+      "噜噜，我今天去动物园玩了，里面好大、好多树",
+      "我看到了好多动物有大猩猩、大象、大熊猫、树上还有鹦鹉",
+      "甚至还有两只老虎打起来了"
+    ],
+    "assets": [
+      {
+        "id": "tree",
+        "name": "树",
+        "kind": "plant",
+        "description": "一棵圆润的卡通树，树干粗短，树冠呈蓬松的球状，适合作为动物园的绿化。",
+        "image_prompt": "一棵单独的卡通树，温馨故事书风格，柔和圆润的简化造型，大面积干净色块，温暖柔和的粉彩色调，极少细节，友好的比例，清晰的树干和球形树冠，中性姿势，均匀光照，浅色纯背景，无场景、无文字、无底座、无多视图拼贴。",
+        "height_m": 6.0,
+        "collision_radius_m": 1.2,
+        "source_quotes": [
+          0,
+          1
+        ],
+        "inferred": false
+      },
+      {
+        "id": "gorilla",
+        "name": "大猩猩",
+        "kind": "animal",
+        "description": "一只友善的大猩猩，体格健壮，黑色毛发简化成大块面，面部表情温和。",
+        "image_prompt": "一只单独的大猩猩，温馨故事书卡通风格，柔和圆润的简化造型，大面积干净色块，温暖柔和的粉彩色调，极少细节，友好的比例，清晰可辨的大猩猩特征，中性站姿，均匀光照，浅色纯背景，无场景、无文字、无底座、无多视图拼贴。",
+        "height_m": 1.7,
+        "collision_radius_m": 0.8,
+        "source_quotes": [
+          1
+        ],
+        "inferred": false
+      },
+      {
+        "id": "elephant",
+        "name": "大象",
+        "kind": "animal",
+        "description": "一只圆润的大象，灰色身体，大耳朵和长鼻子，形态可爱。",
+        "image_prompt": "一只单独的大象，温馨故事书卡通风格，柔和圆润的简化造型，大面积干净色块，温暖柔和的粉彩色调，极少细节，友好的比例，清晰可辨的大象特征，中性站姿，均匀光照，浅色纯背景，无场景、无文字、无底座、无多视图拼贴。",
+        "height_m": 3.0,
+        "collision_radius_m": 1.5,
+        "source_quotes": [
+          1
+        ],
+        "inferred": false
+      },
+      {
+        "id": "panda",
+        "name": "大熊猫",
+        "kind": "animal",
+        "description": "一只胖乎乎的大熊猫，黑白分明的色块，圆耳朵和黑眼圈，憨态可掬。",
+        "image_prompt": "一只单独的大熊猫，温馨故事书卡通风格，柔和圆润的简化造型，大面积干净色块，温暖柔和的粉彩色调，极少细节，友好的比例，清晰可辨的大熊猫特征，中性坐姿，均匀光照，浅色纯背景，无场景、无文字、无底座、无多视图拼贴。",
+        "height_m": 1.5,
+        "collision_radius_m": 0.9,
+        "source_quotes": [
+          1
+        ],
+        "inferred": false
+      },
+      {
+        "id": "parrot",
+        "name": "鹦鹉",
+        "kind": "animal",
+        "description": "一只色彩鲜艳的小鹦鹉，圆头弯喙，翅膀收拢，适合栖息在树枝上。",
+        "image_prompt": "一只单独的鹦鹉，温馨故事书卡通风格，柔和圆润的简化造型，大面积干净色块，温暖柔和的粉彩色调，极少细节，友好的比例，清晰可辨的鹦鹉特征，中性站立姿势，均匀光照，浅色纯背景，无场景、无文字、无底座、无多视图拼贴。",
+        "height_m": 0.3,
+        "collision_radius_m": 0.2,
+        "source_quotes": [
+          1
+        ],
+        "inferred": false
+      },
+      {
+        "id": "tiger",
+        "name": "老虎",
+        "kind": "animal",
+        "description": "一只威风但可爱的老虎，橙色身体上有黑色条纹，姿态中性，可单独重复使用。",
+        "image_prompt": "一只单独的老虎，温馨故事书卡通风格，柔和圆润的简化造型，大面积干净色块，温暖柔和的粉彩色调，极少细节，友好的比例，清晰可辨的老虎特征，中性站姿，均匀光照，浅色纯背景，无场景、无文字、无底座、无多视图拼贴。",
+        "height_m": 1.2,
+        "collision_radius_m": 0.7,
+        "source_quotes": [
+          2
+        ],
+        "inferred": false
+      },
+      {
+        "id": "entrance",
+        "name": "动物园入口",
+        "kind": "structure",
+        "description": "一个带拱门的欢迎入口，有售票亭和指示牌，作为游览起点。",
+        "image_prompt": "一个单独的卡通动物园入口拱门，温馨故事书卡通风格，柔和圆润的简化造型，大面积干净色块，温暖柔和的粉彩色调，极少细节，友好的比例，清晰的拱门和欢迎牌，中性正面视角，均匀光照，浅色纯背景，无场景、无文字、无底座、无多视图拼贴。",
+        "height_m": 4.0,
+        "collision_radius_m": 2.0,
+        "source_quotes": [
+          0
+        ],
+        "inferred": true
+      },
+      {
+        "id": "pavilion",
+        "name": "休息亭",
+        "kind": "structure",
+        "description": "一个带长椅和顶棚的休息亭，供游客遮阳休息。",
+        "image_prompt": "一个单独的卡通休息亭，温馨故事书卡通风格，柔和圆润的简化造型，大面积干净色块，温暖柔和的粉彩色调，极少细节，友好的比例，清晰的顶棚和长椅，中性视角，均匀光照，浅色纯背景，无场景、无文字、无底座、无多视图拼贴。",
+        "height_m": 3.0,
+        "collision_radius_m": 2.5,
+        "source_quotes": [
+          0
+        ],
+        "inferred": true
+      },
+      {
+        "id": "shelter",
+        "name": "动物庇护所",
+        "kind": "structure",
+        "description": "一个简单的动物小屋，有屋顶和入口，为动物提供休息空间。",
+        "image_prompt": "一个单独的卡通动物庇护所小屋，温馨故事书卡通风格，柔和圆润的简化造型，大面积干净色块，温暖柔和的粉彩色调，极少细节，友好的比例，清晰的屋顶和门洞，中性视角，均匀光照，浅色纯背景，无场景、无文字、无底座、无多视图拼贴。",
+        "height_m": 2.5,
+        "collision_radius_m": 1.8,
+        "source_quotes": [
+          1
+        ],
+        "inferred": true
+      }
+    ],
+    "instances": [
+      {
+        "id": "tree_01",
+        "asset_id": "tree",
+        "position": [
+          -16.0,
+          0.0,
+          18.0
+        ],
+        "yaw": 0.0,
+        "scale": 1.0,
+        "parent_id": null
+      },
+      {
+        "id": "tree_02",
+        "asset_id": "tree",
+        "position": [
+          -14.0,
+          0.0,
+          24.0
+        ],
+        "yaw": 0.3,
+        "scale": 1.1,
+        "parent_id": null
+      },
+      {
+        "id": "tree_03",
+        "asset_id": "tree",
+        "position": [
+          -18.0,
+          0.0,
+          30.0
+        ],
+        "yaw": 0.6,
+        "scale": 0.9,
+        "parent_id": null
+      },
+      {
+        "id": "tree_04",
+        "asset_id": "tree",
+        "position": [
+          -20.0,
+          0.0,
+          36.0
+        ],
+        "yaw": 0.9,
+        "scale": 1.0,
+        "parent_id": null
+      },
+      {
+        "id": "tree_05",
+        "asset_id": "tree",
+        "position": [
+          -15.0,
+          0.0,
+          42.0
+        ],
+        "yaw": 1.2,
+        "scale": 1.2,
+        "parent_id": null
+      },
+      {
+        "id": "tree_06",
+        "asset_id": "tree",
+        "position": [
+          -12.0,
+          0.0,
+          48.0
+        ],
+        "yaw": 1.5,
+        "scale": 1.0,
+        "parent_id": null
+      },
+      {
+        "id": "tree_07",
+        "asset_id": "tree",
+        "position": [
+          0.0,
+          0.0,
+          12.0
+        ],
+        "yaw": 1.8,
+        "scale": 1.1,
+        "parent_id": null
+      },
+      {
+        "id": "tree_08",
+        "asset_id": "tree",
+        "position": [
+          2.0,
+          0.0,
+          18.0
+        ],
+        "yaw": 2.1,
+        "scale": 1.0,
+        "parent_id": null
+      },
+      {
+        "id": "tree_09",
+        "asset_id": "tree",
+        "position": [
+          4.0,
+          0.0,
+          24.0
+        ],
+        "yaw": 2.4,
+        "scale": 0.9,
+        "parent_id": null
+      },
+      {
+        "id": "tree_10",
+        "asset_id": "tree",
+        "position": [
+          6.0,
+          0.0,
+          30.0
+        ],
+        "yaw": 2.7,
+        "scale": 1.0,
+        "parent_id": null
+      },
+      {
+        "id": "tree_11",
+        "asset_id": "tree",
+        "position": [
+          8.0,
+          0.0,
+          36.0
+        ],
+        "yaw": 3.0,
+        "scale": 1.2,
+        "parent_id": null
+      },
+      {
+        "id": "tree_12",
+        "asset_id": "tree",
+        "position": [
+          10.0,
+          0.0,
+          42.0
+        ],
+        "yaw": 3.3,
+        "scale": 1.0,
+        "parent_id": null
+      },
+      {
+        "id": "tree_13",
+        "asset_id": "tree",
+        "position": [
+          12.0,
+          0.0,
+          48.0
+        ],
+        "yaw": 3.6,
+        "scale": 1.1,
+        "parent_id": null
+      },
+      {
+        "id": "tree_14",
+        "asset_id": "tree",
+        "position": [
+          22.0,
+          0.0,
+          20.0
+        ],
+        "yaw": 3.9,
+        "scale": 1.0,
+        "parent_id": null
+      },
+      {
+        "id": "tree_15",
+        "asset_id": "tree",
+        "position": [
+          24.0,
+          0.0,
+          26.0
+        ],
+        "yaw": 4.2,
+        "scale": 0.9,
+        "parent_id": null
+      },
+      {
+        "id": "tree_16",
+        "asset_id": "tree",
+        "position": [
+          26.0,
+          0.0,
+          32.0
+        ],
+        "yaw": 4.5,
+        "scale": 1.0,
+        "parent_id": null
+      },
+      {
+        "id": "tree_17",
+        "asset_id": "tree",
+        "position": [
+          28.0,
+          0.0,
+          38.0
+        ],
+        "yaw": 4.8,
+        "scale": 1.1,
+        "parent_id": null
+      },
+      {
+        "id": "tree_18",
+        "asset_id": "tree",
+        "position": [
+          30.0,
+          0.0,
+          44.0
+        ],
+        "yaw": 5.1,
+        "scale": 1.0,
+        "parent_id": null
+      },
+      {
+        "id": "tree_19",
+        "asset_id": "tree",
+        "position": [
+          32.0,
+          0.0,
+          50.0
+        ],
+        "yaw": 5.4,
+        "scale": 0.9,
+        "parent_id": null
+      },
+      {
+        "id": "tree_20",
+        "asset_id": "tree",
+        "position": [
+          18.0,
+          0.0,
+          54.0
+        ],
+        "yaw": 5.7,
+        "scale": 1.0,
+        "parent_id": null
+      },
+      {
+        "id": "tree_21",
+        "asset_id": "tree",
+        "position": [
+          -8.0,
+          0.0,
+          54.0
+        ],
+        "yaw": 0.2,
+        "scale": 1.1,
+        "parent_id": null
+      },
+      {
+        "id": "tree_22",
+        "asset_id": "tree",
+        "position": [
+          -4.0,
+          0.0,
+          50.0
+        ],
+        "yaw": 0.5,
+        "scale": 1.0,
+        "parent_id": null
+      },
+      {
+        "id": "gorilla_01",
+        "asset_id": "gorilla",
+        "position": [
+          -10.0,
+          0.0,
+          30.0
+        ],
+        "yaw": 1.57,
+        "scale": 1.0,
+        "parent_id": null
+      },
+      {
+        "id": "elephant_01",
+        "asset_id": "elephant",
+        "position": [
+          25.0,
+          0.0,
+          25.0
+        ],
+        "yaw": 3.14,
+        "scale": 1.0,
+        "parent_id": null
+      },
+      {
+        "id": "panda_01",
+        "asset_id": "panda",
+        "position": [
+          5.0,
+          0.0,
+          45.0
+        ],
+        "yaw": 0.78,
+        "scale": 1.0,
+        "parent_id": null
+      },
+      {
+        "id": "parrot_01",
+        "asset_id": "parrot",
+        "position": [
+          0.0,
+          4.5,
+          0.0
+        ],
+        "yaw": 0.0,
+        "scale": 1.0,
+        "parent_id": "tree_04"
+      },
+      {
+        "id": "tiger_01",
+        "asset_id": "tiger",
+        "position": [
+          15.0,
+          0.0,
+          20.0
+        ],
+        "yaw": 0.0,
+        "scale": 1.0,
+        "parent_id": null
+      },
+      {
+        "id": "tiger_02",
+        "asset_id": "tiger",
+        "position": [
+          16.5,
+          0.0,
+          20.0
+        ],
+        "yaw": 3.14,
+        "scale": 1.0,
+        "parent_id": null
+      },
+      {
+        "id": "entrance_01",
+        "asset_id": "entrance",
+        "position": [
+          15.396868495279751,
+          0.0,
+          57.65501501291432
+        ],
+        "yaw": 0.4911635982862605,
+        "scale": 1.0,
+        "parent_id": null
+      },
+      {
+        "id": "pavilion_01",
+        "asset_id": "pavilion",
+        "position": [
+          8.0,
+          0.0,
+          15.0
+        ],
+        "yaw": -0.5,
+        "scale": 1.0,
+        "parent_id": null
+      },
+      {
+        "id": "shelter_01",
+        "asset_id": "shelter",
+        "position": [
+          -10.0,
+          0.0,
+          36.0
+        ],
+        "yaw": 0.0,
+        "scale": 1.0,
+        "parent_id": null
+      }
+    ],
+    "relations": [
+      {
+        "kind": "perched_on",
+        "subjects": [
+          "parrot_01",
+          "tree_04"
+        ],
+        "description": "鹦鹉栖息在树上。"
+      },
+      {
+        "kind": "fighting",
+        "subjects": [
+          "tiger_01",
+          "tiger_02"
+        ],
+        "description": "两只老虎在打架。"
+      }
+    ],
+    "layout_notes": "动物园入口位于(22,0,70)，沿路径向(-24,0,-16)延伸。展区分布在x=-18..38, z=10..55，游客空间清晰。树木环绕边界，大猩猩、大象、熊猫、鹦鹉和老虎各有展区，老虎集中在一处，鹦鹉栖息在树上，入口、休息亭和庇护所提供完整游览环境。"
+  },
+  "planner_model": "deepseek-flash",
+  "recipe": {
+    "title": "动物园探索场景",
+    "intro": "一个可漫步的卡通动物园，包含大猩猩、大象、熊猫、鹦鹉和两只老虎的展区，以及入口、休息亭和动物庇护所。",
+    "inspiration": "来自你和噜噜的动物园对话",
+    "time": "day",
+    "suns": 1,
+    "moons": 0,
+    "terrain": "meadow",
+    "water": "none",
+    "palette": {
+      "sky_top": "#7fb2e5",
+      "sky_mid": "#bfe0f2",
+      "horizon": "#ffe9cf",
+      "ground_a": "#b5dc8a",
+      "ground_b": "#78b46a",
+      "accent": "#f0a35e"
+    },
+    "flora": {
+      "type": "round_trees",
+      "density": 0,
+      "colors": [
+        "#547845"
+      ]
+    },
+    "weather": "clear",
+    "landmarks": [],
+    "quest": {
+      "goal": "一起逛逛你记忆中的动物园",
+      "item": "回忆",
+      "item_shape": "feather",
+      "count": 0,
+      "hints": [],
+      "ending": "今天的动物园被我们记住了。"
+    },
+    "cat": {
+      "outfit": "none",
+      "outfit_color": "#d6a779",
+      "role": "同行伙伴"
+    }
+  },
+  "demo": true,
+  "assets": {
+    "tree": {
+      "state": "ready",
+      "name": "树",
+      "provider": "rodin",
+      "image_url": "/api/scene-studio/demo-zoo/assets/tree/image",
+      "image_sha256": "c8a6068b9368c9a4c7a6453ebf39bd967594609c75714973a22308e954196a31",
+      "image_finished_at": 1792288346.8542604,
+      "image_model": "gpt-image-2.5-flare",
+      "model_finished_at": 1792288562.0570912,
+      "model_sha256": "85c6d66db4fa45febb75b4b61fd97badc03371b4a1e70a2670350c8516c28b14",
+      "model_bytes": 1527956,
+      "model_url": "/api/scene-studio/demo-zoo/assets/tree/model",
+      "message": "示例资产"
+    },
+    "gorilla": {
+      "state": "ready",
+      "name": "大猩猩",
+      "provider": "rodin",
+      "image_url": "/api/scene-studio/demo-zoo/assets/gorilla/image",
+      "image_sha256": "5f71d1dc3efcb902a9ecae4eadfe704ad48eaa61e7d2c203911bbd2c991ebdd8",
+      "image_finished_at": 1792288347.9437757,
+      "image_model": "gpt-image-2.5-flare",
+      "model_finished_at": 1792288561.8014145,
+      "model_sha256": "6d10e3bd3bef2cf79cf9379edcefbb63fa9a10a09e0c2fd24cb7cdc4343d5cf8",
+      "model_bytes": 1885024,
+      "model_url": "/api/scene-studio/demo-zoo/assets/gorilla/model",
+      "message": "示例资产"
+    },
+    "elephant": {
+      "state": "ready",
+      "name": "大象",
+      "provider": "rodin",
+      "image_url": "/api/scene-studio/demo-zoo/assets/elephant/image",
+      "image_sha256": "5894fc892c9514adb3fabf1d11f73aa464d6bf2a3cd5dc0871f777b00a2112fe",
+      "image_finished_at": 1792288370.532146,
+      "image_model": "gpt-image-2.5-flare",
+      "model_finished_at": 1792288562.3009806,
+      "model_sha256": "7d0545eb70224316e0757929350675093dd5632a009194c3ec9c0a43e01ae12d",
+      "model_bytes": 1554944,
+      "model_url": "/api/scene-studio/demo-zoo/assets/elephant/model",
+      "message": "示例资产"
+    },
+    "panda": {
+      "state": "ready",
+      "name": "大熊猫",
+      "provider": "rodin",
+      "image_url": "/api/scene-studio/demo-zoo/assets/panda/image",
+      "image_sha256": "60bba900c6b8219f5987a379255f09fcad4c26265081c79b094a6c030e06d880",
+      "image_finished_at": 1792288373.6265101,
+      "image_model": "gpt-image-2.5-flare",
+      "model_finished_at": 1792288568.1381445,
+      "model_sha256": "38de05683f5ad53796dc284748c8b8701f33ba48201e31433ca14b3c1aa1dfa9",
+      "model_bytes": 1767688,
+      "model_url": "/api/scene-studio/demo-zoo/assets/panda/model",
+      "message": "示例资产"
+    },
+    "parrot": {
+      "state": "ready",
+      "name": "鹦鹉",
+      "provider": "rodin",
+      "image_url": "/api/scene-studio/demo-zoo/assets/parrot/image",
+      "image_sha256": "d95d4ed414763b3d54a78031a505fa2621aa9c388a8f4f167de0931f31d75adc",
+      "image_finished_at": 1792288402.9726117,
+      "image_model": "gpt-image-2.5-flare",
+      "model_finished_at": 1792288568.3872113,
+      "model_sha256": "6114aac40eb03df4ee2700626d873fb9ecec9cd15b98e184394d8e7aa224f6df",
+      "model_bytes": 2042164,
+      "model_url": "/api/scene-studio/demo-zoo/assets/parrot/model",
+      "message": "示例资产"
+    },
+    "tiger": {
+      "state": "ready",
+      "name": "老虎",
+      "provider": "rodin",
+      "image_url": "/api/scene-studio/demo-zoo/assets/tiger/image",
+      "image_sha256": "257139bee5ce210d7a77bca528bed2af93479be7059715de9d828706d61de963",
+      "image_finished_at": 1792288398.3890224,
+      "image_model": "gpt-image-2.5-flare",
+      "model_finished_at": 1792288567.8872669,
+      "model_sha256": "57fa1d867ad27cb614953140fcf0a625fd30156a34050e5da603762058449849",
+      "model_bytes": 1909076,
+      "model_url": "/api/scene-studio/demo-zoo/assets/tiger/model",
+      "message": "示例资产"
+    },
+    "entrance": {
+      "state": "ready",
+      "name": "动物园入口",
+      "provider": "rodin",
+      "image_url": "/api/scene-studio/demo-zoo/assets/entrance/image",
+      "image_sha256": "81d334791be3ec9d14b2612a6b536eb478db4b46f607f428e4e95c5d78e8768f",
+      "image_finished_at": 1792288426.697318,
+      "image_model": "gpt-image-2.5-flare",
+      "model_finished_at": 1792288573.440517,
+      "model_sha256": "5a4a543d0f4b702eb04fb258276530b0c140b5e725288f5cb539073c410eb52a",
+      "model_bytes": 2346740,
+      "model_url": "/api/scene-studio/demo-zoo/assets/entrance/model",
+      "message": "示例资产"
+    },
+    "pavilion": {
+      "state": "ready",
+      "name": "休息亭",
+      "provider": "rodin",
+      "image_url": "/api/scene-studio/demo-zoo/assets/pavilion/image",
+      "image_sha256": "a7239fc123ba138ba54dc85b0a568b603e01b6052459800d803b892bf3059347",
+      "image_finished_at": 1792288427.598145,
+      "image_model": "gpt-image-2.5-flare",
+      "model_finished_at": 1792288574.450901,
+      "model_sha256": "9745930906205b9c8db6505091b1c42666cef03953e3db95df457f7d5a0e4d17",
+      "model_bytes": 1770040,
+      "model_url": "/api/scene-studio/demo-zoo/assets/pavilion/model",
+      "message": "示例资产"
+    },
+    "shelter": {
+      "state": "ready",
+      "name": "动物庇护所",
+      "provider": "rodin",
+      "image_url": "/api/scene-studio/demo-zoo/assets/shelter/image",
+      "image_sha256": "6aec3225deb2c340ba97eeb0b01b85ada45e27d22a8e67063d897b3ba21c332e",
+      "image_finished_at": 1792288473.262401,
+      "image_model": "gpt-image-2.5-flare",
+      "model_finished_at": 1792288574.0464725,
+      "model_sha256": "81eaf0363dbb19e71d8db3ab952c4f78421c9b98e68e066f51d88b01bcae9509",
+      "model_bytes": 1587108,
+      "model_url": "/api/scene-studio/demo-zoo/assets/shelter/model",
+      "message": "示例资产"
+    }
+  },
+  "source_scene": "f3456b24146b4830ba72befffe9850b7"
+}
