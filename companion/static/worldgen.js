@@ -180,6 +180,16 @@ export function floraKit(type, colors, max) {
   return { meshes: parts.map((p) => p.mesh), place };
 }
 
+let _dot = null;
+function dotTexture() {
+  if (_dot) return _dot;
+  const c = document.createElement("canvas"); c.width = c.height = 64;
+  const x = c.getContext("2d"), g = x.createRadialGradient(32, 32, 0, 32, 32, 32);
+  g.addColorStop(0, "rgba(255,255,255,1)"); g.addColorStop(0.45, "rgba(255,240,250,.85)"); g.addColorStop(1, "rgba(255,230,245,0)");
+  x.fillStyle = g; x.fillRect(0, 0, 64, 64);
+  return (_dot = new THREE.CanvasTexture(c));
+}
+
 // ---------- 地标 ----------
 // 返回 { group, radius（碰撞半径）, top（顶部高度，用来放名字） }
 export function buildLandmark(type, accentHex) {
@@ -321,6 +331,38 @@ export function buildLandmark(type, accentHex) {
       radius = 2; top = 8;
       break;
     }
+    case "whale": {
+      // 在天上游的大鲸鱼：绕着地标慢慢转圈，尾巴上下摆，头顶喷出一串亮晶晶的水花
+      const pink = mat(0xffa9c8, { emissive: 0xff7fae, emissiveIntensity: 0.18, roughness: 0.6 });
+      const belly = mat(0xfff0f6, { emissive: 0xffd6e6, emissiveIntensity: 0.15 });
+      const swim = new THREE.Group(); g.add(swim);
+      const body = new THREE.Group(); swim.add(body);
+      const part = (geo, m, x, y, z, sx = 1, sy = 1, sz = 1) => { const mesh = new THREE.Mesh(geo, m); mesh.position.set(x, y, z); mesh.scale.set(sx, sy, sz); mesh.castShadow = true; body.add(mesh); return mesh; };
+      const ball = new THREE.SphereGeometry(1, 64, 40);
+      part(ball, pink, 0, 0, 0, 2.7, 2.3, 5.6);
+      part(ball, belly, 0, -0.62, 0.7, 2.35, 1.75, 4.75);
+      const smile = new THREE.Mesh(new THREE.TorusGeometry(0.55, 0.07, 8, 24, Math.PI * 0.8), mat(0x6b2f45));
+      smile.position.set(0, -0.55, 5.05); smile.rotation.set(0.25, 0, Math.PI * 1.1); body.add(smile);
+      for (const sx of [-1, 1]) {
+        part(new THREE.SphereGeometry(0.34, 16, 12), mat(0x2b1d2e, { roughness: 0.2 }), sx * 2.25, 0.35, 3.4);
+        part(new THREE.SphereGeometry(0.11, 10, 8), mat(0xffffff, { emissive: 0xffffff, emissiveIntensity: 0.6 }), sx * 2.43, 0.5, 3.62);
+        part(ball, mat(0xff7f9e, { emissive: 0xff7f9e, emissiveIntensity: 0.3 }), sx * 2.2, -0.35, 3.85, 0.08, 0.28, 0.45);
+        const fin = part(ball, pink, sx * 2.5, -1.1, 1.4, 1.5, 0.22, 0.75);
+        fin.rotation.z = sx * -0.55; fin.rotation.y = sx * 0.4;
+      }
+      const tail = new THREE.Group(); tail.position.set(0, 0.2, -4.6); body.add(tail);
+      const stalk = new THREE.Mesh(new THREE.CylinderGeometry(1.1, 0.32, 3.8, 32), pink); stalk.rotation.x = -Math.PI / 2; stalk.position.z = -1.5; tail.add(stalk);
+      for (const sx of [-1, 1]) { const f = new THREE.Mesh(ball, pink); f.scale.set(2.3, 0.16, 1.05); f.position.set(sx * 1.7, 0, -3.7); f.rotation.y = sx * 0.55; tail.add(f); }
+      // 喷水：一串发光的小点，从头顶冒出来
+      const n = 40, pos = new Float32Array(n * 3);
+      const spout = new THREE.Points(new THREE.BufferGeometry().setAttribute("position", new THREE.BufferAttribute(pos, 3)),
+        new THREE.PointsMaterial({ color: 0xfff3fb, size: 0.45, map: dotTexture(), transparent: true, opacity: 0.95, depthWrite: false }));
+      spout.position.set(0, 2.1, 2.2); body.add(spout);
+      g.userData.swim = { swim, body, tail, spout, n, R: 26, H: 13 };
+      g.userData.labelParent = body;
+      radius = 0; top = 3;
+      break;
+    }
     case "statue":
     default: {
       add(new THREE.CylinderGeometry(1.6, 1.8, 1.4, 16), stone, 0, 0.7);
@@ -338,6 +380,20 @@ export function animateLandmark(g, t) {
   if (u.spinZ) u.spinZ.rotation.z = t * 0.25;
   if (u.spinY) u.spinY.rotation.y = t * 0.4;
   if (u.bob) g.rotation.z = Math.sin(t * 0.8) * 0.05;
+  if (u.swim) {
+    const w = u.swim, a = t * 0.07;
+    w.swim.position.set(Math.cos(a) * w.R, w.H + Math.sin(t * 0.4) * 1.8, Math.sin(a) * w.R);
+    w.swim.rotation.y = Math.atan2(-Math.sin(a), Math.cos(a));
+    w.body.rotation.x = Math.sin(t * 0.4 + 1.2) * -0.09;
+    w.body.rotation.z = Math.sin(t * 0.7) * 0.05;
+    w.tail.rotation.x = Math.sin(t * 1.6) * 0.28;
+    const p = w.spout.geometry.attributes.position;
+    for (let i = 0; i < w.n; i++) {
+      const k = (t * 0.6 + i / w.n) % 1, ang = i * 2.399;
+      p.setXYZ(i, Math.cos(ang) * k * 1.4, k * 3.2 - k * k * 1.6, Math.sin(ang) * k * 1.4 + 0.3);
+    }
+    p.needsUpdate = true;
+  }
 }
 
 // ---------- 收集物 ----------

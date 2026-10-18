@@ -30,6 +30,7 @@ LANDMARKS = {
     "lighthouse": "灯塔", "library": "图书馆", "tower": "高塔", "giant_tree": "参天大树", "windmill": "风车",
     "ferris_wheel": "摩天轮", "bell": "大钟", "arch": "拱门", "bridge": "拱桥", "observatory": "天文台",
     "carousel": "旋转木马", "well": "许愿井", "tent": "帐篷", "boat": "小船", "statue": "雕像",
+    "whale": "在天上游泳的大鲸鱼（会绕着这里转圈、喷水）",
 }
 ITEM_SHAPES = {
     "star": "星星", "page": "书页", "shell": "贝壳", "heart": "爱心", "key": "钥匙", "feather": "羽毛",

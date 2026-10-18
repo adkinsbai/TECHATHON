@@ -1035,15 +1035,15 @@ if (GEN) {
     built.group.rotation.y = Math.atan2(SPAWN.x - spot.x, SPAWN.z - spot.z);
     const label = WG.textSprite(lm.label);
     label.position.y = built.top + 1.6;
-    built.group.add(label);
+    (built.group.userData.labelParent || built.group).add(label);
     scene.add(built.group);
-    treeColliders.push({ x: spot.x, z: spot.z, r: built.radius });
-    landmarks.push({ group: built.group, x: spot.x, z: spot.z, info: lm });
+    if (built.radius > 0) treeColliders.push({ x: spot.x, z: spot.z, r: built.radius });   // 鲸鱼在天上，不挡路
+    landmarks.push({ group: built.group, x: spot.x, z: spot.z, info: lm, r: built.radius });
   });
   // 噜噜：换上这个世界的装扮，站在第一个地标前
   scene.add(Cat.root);
   const front = new THREE.Vector3(SPAWN.x - CABIN.x, 0, SPAWN.z - CABIN.z).normalize();
-  const homeR = treeColliders.length ? treeColliders[treeColliders.length - landmarks.length]?.r ?? 3 : 3;
+  const homeR = landmarks[0]?.r || 3;
   Cat.root.position.set(CABIN.x + front.x * (homeR + 3), 0, CABIN.z + front.z * (homeR + 3));
   Cat.root.position.y = heightAt(Cat.root.position.x, Cat.root.position.z);
   Cat.root.rotation.y = Math.atan2(front.x, front.z);
